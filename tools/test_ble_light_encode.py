@@ -69,6 +69,21 @@ class DeliTests(unittest.TestCase):
         )
         self.assertEqual(len(adv), 26)
 
+    def test_pair_default_payload_skips_first_scramble(self) -> None:
+        tx, adv, _ = enc.encode_deli_command("pair", [0x12, 0x34, 0x56, 0x78], 1, 1)
+        self.assertEqual(len(adv), 26)
+        self.assertEqual(tx[5:9], b"HFKJ")
+        # cmd 0xB4 skips first scramble; pair uses AA 66 55
+        _, unpair, _ = enc.encode_deli_command("unpair", [0x12, 0x34, 0x56, 0x78], 1, 1)
+        self.assertNotEqual(adv, unpair)
+
+    def test_both_modes(self) -> None:
+        adv0, adv1 = enc.encode_deli_both("on", [9, 8, 7, 6], 3, 2)
+        self.assertEqual(len(adv0), 26)
+        self.assertEqual(len(adv1), 26)
+        self.assertEqual(adv0[:4], b"HFKJ")
+        self.assertEqual(adv1[:4], b"DLKJ")
+
 
 class MeshTests(unittest.TestCase):
     def test_light_on_frame(self) -> None:

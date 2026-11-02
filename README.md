@@ -4,12 +4,14 @@
 
 灯控走 BLE **广播**，不写 GATT 特征值。协议说明和命令表：
 
-- [docs/ble-light-protocol.md](docs/ble-light-protocol.md)
+- [照明灯对码过程与控制码](docs/zm-light-pairing-and-control.md)
+- [两套 BLE 广播协议总表](docs/ble-light-protocol.md)
 
 生成空中 payload：
 
 ```bash
 python3 tools/test_ble_light_encode.py
+python3 tools/ble_light_encode.py deli --cmd pair --rolling 12:34:56:78 --dest 1 --pid 1 --both
+python3 tools/ble_light_encode.py deli --cmd on --rolling 12:34:56:78 --dest 1 --pid 2 --both
 python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80
-python3 tools/ble_light_encode.py deli --cmd on --rolling 12:34:56:78 --dest 1 --pid 1
 ```

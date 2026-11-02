@@ -50,6 +50,8 @@ MESH_HEADER = (0x65, 0x88)  # 101, 136
 # DELI command bytes from f.c.c.a.a (DLKeyCode).
 DELI_CMD = {
     "pair": 0xB4,
+    "unpair": 0xB4,
+    "clear": 0xB0,
     "query": 0xB0,
     "off": 0xB2,
     "on": 0xB3,
@@ -59,6 +61,7 @@ DELI_CMD = {
     "rgb_off": 0xC0,
     "rgb_on": 0xC1,
     "timer": 0xA5,
+    "scene_code": 0xA7,
     "fan_speed": 0xA7,
     "aux": 0xA6,
     "night": 0xA1,
@@ -69,6 +72,13 @@ DELI_CMD = {
     "dynamic_stop": 0xDB,
     "music_off": 0xD9,
     "music_on": 0xDA,
+}
+
+# Default 3-byte payloads when the caller does not pass one.
+DELI_DEFAULT_PAYLOAD = {
+    "pair": (0xAA, 0x66, 0x55),
+    "unpair": (0xAA, 0xEE, 0x55),
+    "night": (25, 25, 0),
 }
 
 
@@ -221,11 +231,32 @@ def encode_deli_command(
     cmd = DELI_CMD[name]
     use_dest = 255 if group else dest_id
     body = list(payload)
+    if body == [0, 0, 0] and name in DELI_DEFAULT_PAYLOAD:
+        body = list(DELI_DEFAULT_PAYLOAD[name])
     if group and name in ("on", "off"):
         body = [0, 0, 0]
     tx = deli_pack_encode(mode, rolling, use_dest, pid, cmd, body, timestamp)
     adv = deli_advertise_payload(tx)
     return tx, adv, deli_service_uuids(adv)
+
+
+def encode_deli_both(
+    name: str,
+    rolling: Sequence[int],
+    dest_id: int,
+    pid: int,
+    payload: Sequence[int] = (0, 0, 0),
+    timestamp: int = 0,
+    group: bool = False,
+) -> Tuple[bytes, bytes]:
+    """Mode 0 + mode 1 advertise payloads, matching MsgGenerator.b()."""
+    _, adv0, _ = encode_deli_command(
+        name, rolling, dest_id, pid, payload, timestamp, mode=0, group=group
+    )
+    _, adv1, _ = encode_deli_command(
+        name, rolling, dest_id, pid, payload, timestamp, mode=1, group=group
+    )
+    return adv0, adv1
 
 
 class _Lfsr7:
@@ -359,7 +390,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     deli.add_argument("--rolling", default="12:34:56:78", help="4 bytes aa:bb:cc:dd")
     deli.add_argument("--dest", type=int, default=1, help="device destId 0-255, 255=group")
     deli.add_argument("--pid", type=int, default=1)
-    deli.add_argument("--mode", type=int, default=0, choices=(0, 1))
+    deli.add_argument("--mode", type=int, default=0, choices=(0, 1), help="0=HFKJ, 1=DLKJ")
+    deli.add_argument("--both", action="store_true", help="print mode 0 and mode 1 like the app")
     deli.add_argument("--group", action="store_true")
     deli.add_argument("--p0", type=int, default=0)
     deli.add_argument("--p1", type=int, default=0)
@@ -402,6 +434,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         cmd = "rgb"
         parts = [int(x) for x in args.rgb.replace(":", ",").split(",")]
         payload = (parts + [0, 0, 0])[:3]
+    if args.both:
+        adv0, adv1 = encode_deli_both(
+            cmd, rolling, args.dest, args.pid, payload, args.timestamp, args.group
+        )
+        print("mode0 HFKJ 26B:", hexdump(adv0))
+        print("mode1 DLKJ 26B:", hexdump(adv1))
+        return 0
     tx, adv, uuids = encode_deli_command(
         cmd,
         rolling,

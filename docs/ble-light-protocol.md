@@ -11,6 +11,8 @@ APK：`rx_lightcontrol_v2.5_20251021.apk`
 | 家庭 Mesh 灯（设备类型 `2001`） | `LightScreen` | Manufacturer Specific Data，公司 ID **0x0F71**（3953） | 19 字节 DPS，头 `0x77` |
 | 智能「照明灯」（风扇灯 / 吸顶灯） | `SmartDeviceZMFragment` 等 | 13 个 16-bit Service UUID | DELI 指令字节 `0xB2`/`0xB3`/… |
 
+照明灯（type 0）的对码流程、滚码/destId 和控制码表见 [zm-light-pairing-and-control.md](zm-light-pairing-and-control.md)。
+
 编码实现：[`tools/ble_light_encode.py`](../tools/ble_light_encode.py)。
 
 ```bash
