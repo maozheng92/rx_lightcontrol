@@ -1,1 +1,18 @@
 # rx_lightcontrol
+
+睿信灯控 App `rx_lightcontrol_v2.5_20251021.apk`（包名 `com.deep.smartmeicontrol`）。
+
+灯控走 BLE **广播**，不写 GATT 特征值。协议说明和命令表：
+
+- [照明灯对码过程与控制码](docs/zm-light-pairing-and-control.md)
+- [两套 BLE 广播协议总表](docs/ble-light-protocol.md)
+
+生成空中 payload：
+
+```bash
+python3 tools/test_ble_light_encode.py
+python3 tools/ble_light_encode.py deli --cmd pair --rolling 12:34:56:78 --dest 1 --pid 1 --both
+python3 tools/ble_light_encode.py deli --cmd on --rolling 12:34:56:78 --dest 1 --pid 2 --both
+python3 tools/ble_light_encode.py deli-decode 4648,4A4B,87E1,DC4B,B674,B325,EAD0,BCB9,17B1,A4C5,1110,1312,1514
+python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80
+```
