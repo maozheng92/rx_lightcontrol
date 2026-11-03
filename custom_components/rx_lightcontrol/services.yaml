@@ -1,0 +1,107 @@
+send_command:
+  name: Send command
+  description: Send a named DELI opcode (on, off, pair, brightness, …) as BLE advertise.
+  fields:
+    command:
+      name: Command
+      required: true
+      example: on
+      selector:
+        text:
+    p0:
+      name: Payload byte 0
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+    p1:
+      name: Payload byte 1
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+    p2:
+      name: Payload byte 2
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+    group:
+      name: Group (destId 255)
+      default: false
+      selector:
+        boolean:
+    device_id:
+      name: Device ID
+      selector:
+        device:
+          integration: rx_lightcontrol
+
+timer:
+  name: Timer
+  description: Send the 0xA5 timer payload (hours, minutes, seconds). Zero cancels.
+  fields:
+    hours:
+      name: Hours
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 23
+    minutes:
+      name: Minutes
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 59
+    seconds:
+      name: Seconds
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 59
+    device_id:
+      name: Device ID
+      selector:
+        device:
+          integration: rx_lightcontrol
+
+group:
+  name: Group on/off
+  description: Broadcast on/off with destId 255 (app 全开/全关).
+  fields:
+    on:
+      name: Turn on
+      default: true
+      selector:
+        boolean:
+
+pair:
+  name: Pair
+  description: Put the lamp in learn mode first, then send 0xB4 AA 66 55 (HFKJ+DLKJ).
+  fields:
+    device_id:
+      name: Device ID
+      selector:
+        device:
+          integration: rx_lightcontrol
+
+unpair:
+  name: Delete pairing
+  description: Send 0xB0 00 00 00 (app delete) and remove the Home Assistant device.
+  fields:
+    remove_entry:
+      name: Remove from Home Assistant
+      default: true
+      selector:
+        boolean:
+    device_id:
+      name: Device ID
+      selector:
+        device:
+          integration: rx_lightcontrol

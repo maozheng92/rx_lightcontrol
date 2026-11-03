@@ -1,0 +1,61 @@
+# ESP32 companion for 睿信灯控 when Home Assistant has no TX-capable adapter.
+# Pair with the integration's MQTT transmit mode (topic rx_lightcontrol/advertise).
+#
+# Flash with ESPHome, then set the HA config entry to MQTT → this topic.
+# Ordinary bluetooth_proxy cannot advertise; this device can.
+
+esphome:
+  name: rx-light-advertiser
+  friendly_name: 睿信 BLE 广播器
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+mqtt:
+  broker: homeassistant.local
+  username: !secret mqtt_user
+  password: !secret mqtt_password
+  on_json_message:
+    - topic: rx_lightcontrol/advertise
+      then:
+        - lambda: |-
+            if (!x.containsKey("frames")) return;
+            auto frames = x["frames"];
+            int interval_ms = x.containsKey("interval_ms") ? (int)x["interval_ms"] : 100;
+            int repeat = x.containsKey("repeat") ? (int)x["repeat"] : 5;
+            if (interval_ms < 20) interval_ms = 20;
+            if (repeat < 1) repeat = 1;
+            esp_ble_adv_params_t adv_params = {
+                .adv_int_min = 0x00A0,
+                .adv_int_max = 0x00A0,
+                .adv_type = ADV_TYPE_IND,
+                .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
+                .channel_map = ADV_CHNL_ALL,
+                .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
+            };
+            for (int r = 0; r < repeat; r++) {
+              for (size_t i = 0; i < frames.size(); i++) {
+                std::string hex = frames[i].as<std::string>();
+                uint8_t buf[31] = {0};
+                size_t n = hex.length() / 2;
+                if (n > 31) n = 31;
+                for (size_t b = 0; b < n; b++) {
+                  buf[b] = strtoul(hex.substr(b * 2, 2).c_str(), nullptr, 16);
+                }
+                esp_ble_gap_stop_advertising();
+                esp_ble_gap_config_adv_data_raw(buf, n);
+                esp_ble_gap_start_advertising(&adv_params);
+                delay(interval_ms);
+              }
+            }
+            esp_ble_gap_stop_advertising();
+
+esp32_ble:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password

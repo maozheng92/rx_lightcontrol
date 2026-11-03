@@ -1,0 +1,139 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "睿信灯控",
+        "description": "Lights are controlled by BLE advertisements (not GATT). The Home Assistant host needs a Bluetooth adapter, or MQTT plus tools/mqtt_ble_advertiser.py next to the lamp.",
+        "data": {
+          "name": "Name",
+          "protocol": "Product line",
+          "transmit": "How to send advertisements"
+        }
+      },
+      "deli_mode": {
+        "title": "Pairing",
+        "description": "Pairing is one-way BLE advertise (cmd 0xB4, payload AA 66 55). The lamp must be in learn mode. There is no ACK — you confirm whether it reacted. Rolling code is shared by every 照明灯 on this Home Assistant, destId 1–15.",
+        "data": {
+          "setup_mode": "How to add this lamp"
+        }
+      },
+      "deli_pair_info": {
+        "title": "Ready to pair",
+        "description": "Put the lamp in learn mode (wall switch off/on, or power on). It often flashes quickly. Then continue — Home Assistant will advertise for about 1 second (HFKJ + DLKJ × 5). Rolling {rolling}, destId {dest_id}.",
+        "data": {
+          "rolling": "Rolling code",
+          "dest_id": "destId"
+        }
+      },
+      "deli": {
+        "title": "Already paired",
+        "description": "Paste the 4-byte rolling code sniffed from the phone app (scanner decode). Do not pair again or the phone will stop working.",
+        "data": {
+          "rolling": "Rolling code (6B:77:4C:09)",
+          "dest_id": "destId"
+        }
+      },
+      "pair": {
+        "title": "Pairing",
+        "description": "Sending pairing advertisements for destId {dest_id} (rolling {rolling})…"
+      },
+      "pair_confirm": {
+        "title": "Did the lamp react?",
+        "description": "The app never gets an ACK. If the lamp flashed, stayed on, or beeped, pairing worked. destId {dest_id}, rolling {rolling}.",
+        "data": {
+          "result": "Result"
+        }
+      },
+      "pair_failed": {
+        "title": "Could not advertise",
+        "description": "The pairing frame was not sent. Fix Bluetooth/MQTT and retry, or save the device and use the Pair button later.",
+        "data": {
+          "retry": "Retry pairing now"
+        }
+      },
+      "mesh": {
+        "title": "Mesh device id",
+        "description": "First 6 hex characters of the mesh device id (e.g. AABBCC).",
+        "data": {
+          "dev_id": "Device ID"
+        }
+      },
+      "adapter": {
+        "title": "Bluetooth adapter",
+        "description": "Local HCI adapter used to transmit. HAOS needs the adapter on the host, not only a Bluetooth proxy (proxies cannot advertise).",
+        "data": {
+          "adapter": "Adapter"
+        }
+      },
+      "mqtt": {
+        "title": "MQTT advertiser",
+        "description": "Home Assistant publishes a JSON burst to this topic. Run tools/mqtt_ble_advertiser.py (or the ESPHome example) on a machine that can BLE-advertise next to the lamp.",
+        "data": {
+          "mqtt_topic": "MQTT topic"
+        }
+      }
+    },
+    "progress": {
+      "sending_pair": "Sending pairing advertisements (about 1 second)…"
+    },
+    "error": {
+      "invalid_rolling": "Rolling code must be 4 bytes (8 hex characters).",
+      "invalid_dev_id": "Device id needs at least 6 hex characters.",
+      "advertise_failed": "Could not send BLE advertisements. Check the adapter, or switch to MQTT."
+    },
+    "abort": {
+      "already_configured": "This lamp is already configured."
+    }
+  },
+  "options": {
+    "error": {
+      "advertise_failed": "Could not send BLE advertisements. Check the adapter, or switch to MQTT."
+    },
+    "step": {
+      "init": {
+        "title": "睿信灯控 options",
+        "data": {
+          "transmit": "How to send advertisements",
+          "adapter": "HCI adapter",
+          "mqtt_topic": "MQTT topic",
+          "repeat": "Repeats (app uses 5)",
+          "interval_ms": "Frame duration (ms, app uses 100)",
+          "min_kelvin": "Warmest white (K)",
+          "max_kelvin": "Coolest white (K)",
+          "dest_id": "destId",
+          "pair_now": "Re-pair now (put the lamp in learn mode first)",
+          "unpair_now": "Delete pairing now (0xB0) and remove this device"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "pair": { "name": "Pair" },
+      "unpair": { "name": "Delete pairing" },
+      "night": { "name": "Night light" }
+    }
+  },
+  "services": {
+    "send_command": {
+      "name": "Send command",
+      "description": "Send a named DELI opcode as BLE advertise."
+    },
+    "timer": {
+      "name": "Timer",
+      "description": "Send the 0xA5 timer payload."
+    },
+    "group": {
+      "name": "Group on/off",
+      "description": "Broadcast on/off with destId 255."
+    },
+    "pair": {
+      "name": "Pair",
+      "description": "Send the 0xB4 AA 66 55 pairing advertisements."
+    },
+    "unpair": {
+      "name": "Delete pairing",
+      "description": "Send 0xB0 00 00 00 and remove the device from Home Assistant."
+    }
+  }
+}
