@@ -84,6 +84,82 @@ class DeliTests(unittest.TestCase):
         self.assertEqual(adv0[:4], b"HFKJ")
         self.assertEqual(adv1[:4], b"DLKJ")
 
+    def test_decode_roundtrip_named_commands(self) -> None:
+        for name, payload in (
+            ("on", (0, 0, 0)),
+            ("off", (0, 0, 0)),
+            ("pair", (0xAA, 0x66, 0x55)),
+            ("brightness", (0, 0x03, 0x20)),
+        ):
+            _, adv0, uuids0 = enc.encode_deli_command(
+                name, [0x6B, 0x77, 0x4C, 0x09], 1, 6, payload, mode=0
+            )
+            _, adv1, uuids1 = enc.encode_deli_command(
+                name, [0x6B, 0x77, 0x4C, 0x09], 1, 6, payload, timestamp=0xF73D, mode=1
+            )
+            for adv, uuids, mode in ((adv0, uuids0, 0), (adv1, uuids1, 1)):
+                decoded = enc.decode_deli_advertise(adv)
+                self.assertIsNotNone(decoded, name)
+                self.assertEqual(decoded["mode"], mode)
+                self.assertEqual(decoded["cmd"], enc.DELI_CMD[name])
+                self.assertEqual(decoded["dest_id"], 1)
+                self.assertEqual(decoded["pid"], 6)
+                self.assertEqual(decoded["rolling"], bytes([0x6B, 0x77, 0x4C, 0x09]))
+                self.assertEqual(decoded["payload"], bytes(payload))
+                self.assertEqual(enc.decode_deli_uuids([u[4:8] for u in uuids]), decoded)
+
+
+class DeliCaptureTests(unittest.TestCase):
+    """Live scanner capture of 开灯 (nRF Connect style 13 UUID list)."""
+
+    HFKJ_UUIDS = [
+        "4648", "4A4B", "87E1", "DC4B", "B674", "B325", "EAD0",
+        "BCB9", "17B1", "A4C5", "1110", "1312", "1514",
+    ]
+    DLKJ_UUIDS = [
+        "4C44", "4A4B", "9795", "7C2C", "C000", "DF55", "E636",
+        "E22C", "0094", "1DE0", "3DAA", "13F7", "1514",
+    ]
+
+    def test_decode_hfkj_on_capture(self) -> None:
+        decoded = enc.decode_deli_uuids(self.HFKJ_UUIDS)
+        self.assertIsNotNone(decoded)
+        self.assertEqual(decoded["mode"], 0)
+        self.assertEqual(decoded["cmd"], 0xB3)
+        self.assertEqual(decoded["cmd_name"], "on")
+        self.assertEqual(decoded["dest_id"], 1)
+        self.assertEqual(decoded["pid"], 6)
+        self.assertEqual(decoded["rolling"], bytes([0x6B, 0x77, 0x4C, 0x09]))
+        self.assertEqual(decoded["payload"], bytes([0, 0, 0]))
+        self.assertFalse(decoded["group"])
+        self.assertIsNone(decoded["timestamp"])
+
+    def test_decode_dlkj_on_capture(self) -> None:
+        decoded = enc.decode_deli_uuids(self.DLKJ_UUIDS)
+        self.assertIsNotNone(decoded)
+        self.assertEqual(decoded["mode"], 1)
+        self.assertEqual(decoded["cmd"], 0xB3)
+        self.assertEqual(decoded["dest_id"], 1)
+        self.assertEqual(decoded["pid"], 6)
+        self.assertEqual(decoded["rolling"], bytes([0x6B, 0x77, 0x4C, 0x09]))
+        self.assertEqual(decoded["payload"], bytes([0, 0, 0]))
+        self.assertEqual(decoded["timestamp"], 0xF73D)
+
+    def test_reencode_matches_sniffed_uuids(self) -> None:
+        adv0, adv1 = enc.encode_deli_both(
+            "on", [0x6B, 0x77, 0x4C, 0x09], 1, 6, timestamp=0xF73D
+        )
+        self.assertEqual(enc.uuids_to_payload(self.HFKJ_UUIDS), adv0)
+        self.assertEqual(enc.uuids_to_payload(self.DLKJ_UUIDS), adv1)
+
+    def test_cli_decode_accepts_scanner_paste(self) -> None:
+        pasted = (
+            "Services: 4C44, 4A4B, 9795, 7C2C, C000, DF55, E636, "
+            "E22C, 0094, 1DE0, 3DAA, 13F7, and 1514"
+        )
+        rc = enc.main(["deli-decode", pasted])
+        self.assertEqual(rc, 0)
+
 
 class MeshTests(unittest.TestCase):
     def test_light_on_frame(self) -> None:

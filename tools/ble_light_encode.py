@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import struct
-from typing import Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 # Native libmsglibrary.so rodata tables (SELFKEY1 / SELFKEY2).
 DELI_KEY1 = bytes.fromhex("1d041120987528460baf43acd6be898e")
@@ -81,9 +81,37 @@ DELI_DEFAULT_PAYLOAD = {
     "night": (25, 25, 0),
 }
 
+DELI_CMD_NAME = {
+    0xB4: "pair/unpair",
+    0xB0: "clear",
+    0xB2: "off",
+    0xB3: "on",
+    0xB5: "brightness",
+    0xB7: "cct",
+    0xCA: "rgb",
+    0xC0: "rgb_off",
+    0xC1: "rgb_on",
+    0xA5: "timer",
+    0xA7: "scene_code",
+    0xA6: "aux",
+    0xA1: "night",
+    0xD1: "night_off",
+    0xD3: "scene",
+    0xCB: "dynamic",
+    0xC9: "dynamic_speed",
+    0xDB: "dynamic_stop",
+    0xD9: "music_off",
+    0xDA: "music_on",
+}
+
 
 def _u8(value: int) -> int:
     return value & 0xFF
+
+
+def _int_auto(value: str) -> int:
+    """Accept decimal or 0x-prefixed hex (argparse `type=int` is base 10 only)."""
+    return int(value, 0)
 
 
 def crc16_ccitt_xmodem(data: bytes, init: int = 0) -> int:
@@ -259,6 +287,114 @@ def encode_deli_both(
     return adv0, adv1
 
 
+def uuids_to_payload(uuids: Sequence[str]) -> bytes:
+    """Convert scanner 16-bit UUID list (e.g. 4648,4A4B,...) back to 26 bytes."""
+    out = bytearray()
+    for item in uuids:
+        token = item.strip().lower().replace("0x", "")
+        if len(token) > 4:
+            token = token[4:8] if token.startswith("0000") else token[-4:]
+        if len(token) != 4:
+            raise ValueError(f"bad uuid short id: {item}")
+        value = int(token, 16)
+        out.append(value & 0xFF)
+        out.append((value >> 8) & 0xFF)
+    if len(out) != 26:
+        raise ValueError(f"expected 13 UUIDs / 26 bytes, got {len(out)}")
+    return bytes(out)
+
+
+def _unscramble_second(buf: bytearray, mode: int, pid: int) -> None:
+    key = DELI_KEY1 if mode == 0 else DELI_KEY2
+    k2 = key[nibble_mix(pid + 1)]
+    if mode == 0:
+        for i in range(16):
+            idx = 9 + i
+            buf[idx] = _u8((buf[idx] - key[(i + 6) & 0x0F]) ^ k2)
+    else:
+        for i in range(9, 25):
+            buf[i] = _u8((buf[i] - key[i & 0x0F]) ^ k2)
+
+
+def decode_deli_advertise(adv: bytes) -> Optional[Dict]:
+    """Undo DELI packing. `adv` is the 26-byte UUID payload (Tx_Payload[5:31])."""
+    if len(adv) != 26:
+        raise ValueError("advertise payload must be 26 bytes")
+    if adv[:4] == b"HFKJ":
+        mode = 0
+    elif adv[:4] == b"DLKJ":
+        mode = 1
+    else:
+        return None
+    raw = bytes([0x02, 0x01, 0x01, 0x1B, 0x03]) + adv
+    key = DELI_KEY1 if mode == 0 else DELI_KEY2
+    for pid in range(256):
+        buf = bytearray(raw)
+        _unscramble_second(buf, mode, pid)
+        if buf[9] != 0xFF or buf[11] != pid or buf[10] != _u8(pid + 1):
+            continue
+        crc = crc16_ccitt_xmodem(bytes([0xFF]) + bytes(buf[10:22]))
+        if crc != (buf[23] | (buf[24] << 8)):
+            continue
+        cmd = buf[16]
+        dest = buf[17]
+        rolling = bytes(buf[12:16])
+        k = key[nibble_mix(pid)]
+        if cmd == 0xB4:
+            payload = bytes(buf[20:23])
+        elif mode == 0:
+            if buf[18] != _u8(0x42 - k) or buf[19] != _u8((k ^ pid) + 0xAC):
+                continue
+            payload = bytes(
+                [
+                    _u8((buf[20] - 0xD6) ^ k),
+                    _u8((buf[21] - 0xBE) ^ k),
+                    _u8((buf[22] - 0x89) ^ k),
+                ]
+            )
+        else:
+            if buf[18] != _u8(0x33 - k) or buf[19] != _u8((k ^ pid) + 0xCA):
+                continue
+            payload = bytes(
+                [
+                    _u8((buf[20] - 0x6D) ^ k),
+                    _u8((buf[21] - 0xED) ^ k),
+                    _u8((buf[22] - 0x98) ^ k),
+                ]
+            )
+        timestamp = None
+        if mode == 1:
+            timestamp = adv[21] | (adv[22] << 8)
+        return {
+            "mode": mode,
+            "pid": pid,
+            "cmd": cmd,
+            "cmd_name": DELI_CMD_NAME.get(cmd, f"0x{cmd:02X}"),
+            "dest_id": dest,
+            "rolling": rolling,
+            "payload": payload,
+            "timestamp": timestamp,
+            "group": dest == 255 and cmd in (0xB2, 0xB3),
+        }
+    return None
+
+
+def decode_deli_uuids(uuids: Sequence[str]) -> Optional[Dict]:
+    return decode_deli_advertise(uuids_to_payload(uuids))
+
+
+def parse_uuid_tokens(tokens: Sequence[str]) -> List[str]:
+    """Accept scanner paste: '4648,4A4B,... and 1514' or thirteen separate args."""
+    text = " ".join(tokens)
+    for prefix in ("services:", "service:", "uuids:", "uuid:"):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix) :]
+            break
+    for sep in (",", ";", "|", "and"):
+        text = text.replace(sep, " ")
+    return [item for item in text.split() if item]
+
+
 class _Lfsr7:
     """7-bit LFSR used by f.c.b.i.a.e / f.c.b.i.a.f (key loaded as 7 bits)."""
 
@@ -370,6 +506,22 @@ def _print_deli(tx: bytes, adv: bytes, uuids: Iterable[str]) -> None:
         print(" ", uuid)
 
 
+def _print_decoded(decoded: Dict) -> None:
+    header = "HFKJ" if decoded["mode"] == 0 else "DLKJ"
+    print(f"mode      : {decoded['mode']} {header}")
+    print(f"pid       : {decoded['pid']}")
+    print(f"cmd       : 0x{decoded['cmd']:02X} ({decoded['cmd_name']})")
+    dest = decoded["dest_id"]
+    print(f"dest_id   : {dest}" + (" (group)" if decoded.get("group") else ""))
+    print("rolling   : " + ":".join(f"{b:02X}" for b in decoded["rolling"]))
+    print(f"payload   : {hexdump(decoded['payload'])}")
+    ts = decoded.get("timestamp")
+    if ts is None:
+        print("timestamp : n/a")
+    else:
+        print(f"timestamp : {ts} (0x{ts:04X})")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="proto", required=True)
@@ -396,10 +548,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     deli.add_argument("--p0", type=int, default=0)
     deli.add_argument("--p1", type=int, default=0)
     deli.add_argument("--p2", type=int, default=0)
-    deli.add_argument("--timestamp", type=int, default=0)
+    deli.add_argument("--timestamp", type=_int_auto, default=0, help="mode1 tail; decimal or 0x hex")
     deli.add_argument("--brightness", type=int, help="percent; sends cmd brightness, value*10 if >1")
     deli.add_argument("--cct", type=int, help="percent; sends cmd cct, value*10")
     deli.add_argument("--rgb", help="R,G,B 0-255, sends cmd rgb")
+
+    decode = sub.add_parser(
+        "deli-decode",
+        help="Decode sniffed 13×16-bit service UUIDs from a scanner capture",
+    )
+    decode.add_argument(
+        "uuids",
+        nargs="+",
+        help="13 short UUIDs, e.g. 4648 4A4B ... 1514 (commas/and allowed)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -417,6 +579,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print("Company ID : 0x%04X (%d)" % (MESH_COMPANY_ID, MESH_COMPANY_ID))
         print("Payload 26B:", hexdump(frame))
+        return 0
+
+    if args.proto == "deli-decode":
+        decoded = decode_deli_uuids(parse_uuid_tokens(args.uuids))
+        if not decoded:
+            print("decode failed: not a HFKJ/DLKJ DELI frame, or pid/CRC mismatch")
+            return 1
+        _print_decoded(decoded)
         return 0
 
     rolling = [int(x, 16) for x in args.rolling.replace(",", ":").split(":")]

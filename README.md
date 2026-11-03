@@ -13,5 +13,6 @@
 python3 tools/test_ble_light_encode.py
 python3 tools/ble_light_encode.py deli --cmd pair --rolling 12:34:56:78 --dest 1 --pid 1 --both
 python3 tools/ble_light_encode.py deli --cmd on --rolling 12:34:56:78 --dest 1 --pid 2 --both
+python3 tools/ble_light_encode.py deli-decode 4648,4A4B,87E1,DC4B,B674,B325,EAD0,BCB9,17B1,A4C5,1110,1312,1514
 python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80
 ```

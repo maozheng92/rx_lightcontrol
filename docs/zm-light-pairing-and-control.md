@@ -191,3 +191,48 @@ python3 tools/ble_light_encode.py deli --cmd scene_code --rolling 12:34:56:78 --
 | 加扰 | `libmsglibrary.so` `DELI_Pack_Encode` |
 | UUID 广播 | `f.c.c.b.a`（`AdvertiseManager`） |
 | 滚码随机 | `f.d.a.a.a.a.b()` = `(byte)(127 - nextInt(256))` |
+
+---
+
+## 6. 实采：开灯动作（nRF / Scanner 13 UUID）
+
+扫描器里每条记录的「Services: WXYZ, …」不是 GATT 服务，而是 App 把 26 字节广播拆成的 13 个 16-bit UUID。转换：
+
+```
+扫描器显示 WXYZ  →  payload 两个字节 [YZ, WX]
+```
+
+所以 `4648,4A4B` = `48 46 4B 4A` = ASCII `HFKJ`（mode 0）；`4C44,4A4B` = `44 4C 4B 4A` = `DLKJ`（mode 1）。  
+彩色 Bluetooth 图标、设备名 `N/A`、`Connect` 按钮都和灯控无关：本机没有 Local Name，控制也不走连接。
+
+同一条「开灯」会交替打出两套 UUID（`MsgGenerator` 同时编 mode0+mode1，队列 ×5）。一次捕获里出现的两组是：
+
+| 扫描器 UUID（13 个） | 头 | 26 字节 payload |
+| --- | --- | --- |
+| `4648,4A4B,87E1,DC4B,B674,B325,EAD0,BCB9,17B1,A4C5,1110,1312,1514` | HFKJ | `48 46 4B 4A E1 87 4B DC 74 B6 25 B3 D0 EA B9 BC B1 17 C5 A4 10 11 12 13 14 15` |
+| `4C44,4A4B,9795,7C2C,C000,DF55,E636,E22C,0094,1DE0,3DAA,13F7,1514` | DLKJ | `44 4C 4B 4A 95 97 2C 7C 00 C0 55 DF 36 E6 2C E2 94 00 E0 1D AA 3D F7 13 14 15` |
+
+解开加扰后两组明文相同：
+
+| 字段 | 值 | 含义 |
+| --- | --- | --- |
+| `cmd` | `0xB3` | 开灯（`BleManager.s()` / `kadeBt`） |
+| `payload` | `00 00 00` | 开灯固定空参 |
+| `destId` | `1` | 本机第 1 盏照明灯，不是群控 255 |
+| 滚码 | `6B 77 4C 09` | 本机 `addr1..addr4` |
+| `pid` | `6` | 当时的包序号 |
+| mode1 时间戳 | `0xF73D`（63293） | 只写在 DLKJ 包尾 `AA 3D F7 13 14 15` |
+
+用扫描器粘贴直接解：
+
+```bash
+python3 tools/ble_light_encode.py deli-decode \
+  4648,4A4B,87E1,DC4B,B674,B325,EAD0,BCB9,17B1,A4C5,1110,1312,1514
+```
+
+重放同一条开灯（滚码/dest/pid 必须和灯里记下的一致）：
+
+```bash
+python3 tools/ble_light_encode.py deli --cmd on \
+  --rolling 6B:77:4C:09 --dest 1 --pid 6 --timestamp 0xF73D --both
+```
