@@ -80,3 +80,13 @@ group:
       default: true
       selector:
         boolean:
+
+pair:
+  name: Pair
+  description: Put the lamp in learn mode first, then send 0xB4 AA 66 55 (HFKJ+DLKJ).
+  fields:
+    device_id:
+      name: Device ID
+      selector:
+        device:
+          integration: rx_lightcontrol

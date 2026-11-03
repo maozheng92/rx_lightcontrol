@@ -238,6 +238,60 @@ class HaMappingTests(unittest.TestCase):
         self.assertEqual(air[4:], frame)
 
 
+class PairingTests(unittest.TestCase):
+    def test_pair_frames_are_b4_aa6655(self) -> None:
+        tx0, tx1 = enc.deli_air_frames("pair", [0x6B, 0x77, 0x4C, 0x09], 2, 1)
+        for frame in (tx0, tx1):
+            decoded = enc.decode_deli_advertise(frame[5:])
+            self.assertIsNotNone(decoded)
+            self.assertEqual(decoded["cmd"], 0xB4)
+            self.assertEqual(decoded["payload"], bytes([0xAA, 0x66, 0x55]))
+            self.assertEqual(decoded["dest_id"], 2)
+            self.assertEqual(decoded["rolling"], bytes([0x6B, 0x77, 0x4C, 0x09]))
+
+    def test_next_dest_id_cycles_1_to_15(self) -> None:
+        from pathlib import Path
+        import sys
+
+        cc = str(Path(__file__).resolve().parents[1] / "custom_components" / "rx_lightcontrol")
+        if cc not in sys.path:
+            sys.path.insert(0, cc)
+        from pairing import next_dest_id, rolling_from_entries, used_dest_ids
+
+        self.assertEqual(next_dest_id([]), 1)
+        self.assertEqual(next_dest_id([1, 2, 3]), 4)
+        self.assertEqual(next_dest_id(range(1, 16)), 1)
+        entries = [
+            {"protocol": "deli", "rolling": "6B:77:4C:09", "dest_id": 1},
+            {"protocol": "deli", "rolling": "6B774C09", "dest_id": 2},
+            {"protocol": "mesh", "rolling": "6B:77:4C:09", "dest_id": 3},
+        ]
+        self.assertEqual(rolling_from_entries(entries), "6B:77:4C:09")
+        self.assertEqual(sorted(used_dest_ids(entries, "6b774c09")), [1, 2])
+        self.assertEqual(next_dest_id(used_dest_ids(entries, "6B:77:4C:09")), 3)
+
+    def test_pair_burst_records_two_modes(self) -> None:
+        import asyncio
+        from pathlib import Path
+        import sys
+
+        cc = str(Path(__file__).resolve().parents[1] / "custom_components" / "rx_lightcontrol")
+        if cc not in sys.path:
+            sys.path.insert(0, cc)
+        from advertiser import RecordingAdvertiser
+        from pairing import assert_pair_frames, async_send_pair_burst
+
+        recorder = RecordingAdvertiser()
+        rolling = bytes([0x6B, 0x77, 0x4C, 0x09])
+        frames = asyncio.run(
+            async_send_pair_burst(recorder, rolling, 1, 7, settle_s=0)
+        )
+        self.assertEqual(len(frames), 2)
+        assert_pair_frames(frames, 1, rolling)
+        self.assertEqual(len(recorder.bursts), 1)
+        self.assertEqual(len(recorder.bursts[0]["frames"]), 2)
+
+
 class AdvertiserJsonTests(unittest.TestCase):
     def test_burst_json(self) -> None:
         sys_path = __import__("sys").path

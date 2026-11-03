@@ -175,6 +175,8 @@ python3 tools/ble_light_encode.py deli --cmd scene_code --rolling 12:34:56:78 --
 
 加扰、密钥、CRC 见 [ble-light-protocol.md](ble-light-protocol.md) 第 2 节。
 
+Home Assistant 里的对码向导见 [homeassistant.md](homeassistant.md) 第 2 节。
+
 ---
 
 ## 5. 源码对照

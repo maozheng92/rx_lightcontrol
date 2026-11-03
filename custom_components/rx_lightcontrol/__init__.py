@@ -24,6 +24,7 @@ from .const import (
     PLATFORMS_MESH,
     PROTOCOL_DELI,
     SERVICE_GROUP,
+    SERVICE_PAIR,
     SERVICE_SEND_COMMAND,
     SERVICE_TIMER,
 )
@@ -169,9 +170,30 @@ def _register_services(hass: HomeAssistant) -> None:
             }
         ),
     )
+    async def _pair(call: ServiceCall) -> None:
+        client = _client_for_device(hass, call.data.get("device_id"), call.data.get("entry_id"))
+        if client is None:
+            targets = [item for item in _clients(hass) if item.is_deli]
+            if len(targets) == 1:
+                client = targets[0]
+        if client is None or not client.is_deli:
+            raise ValueError("Specify a 照明灯 device to pair")
+        await client.async_send_pair()
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_GROUP,
         _group,
         schema=vol.Schema({vol.Optional("on", default=True): cv.boolean}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PAIR,
+        _pair,
+        schema=vol.Schema(
+            {
+                vol.Optional("device_id"): cv.string,
+                vol.Optional("entry_id"): cv.string,
+            }
+        ),
     )

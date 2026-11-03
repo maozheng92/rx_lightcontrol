@@ -21,9 +21,15 @@ CONF_INTERVAL_MS = "interval_ms"
 CONF_MIN_KELVIN = "min_kelvin"
 CONF_MAX_KELVIN = "max_kelvin"
 CONF_PAIR_NOW = "pair_now"
+CONF_SETUP_MODE = "setup_mode"
+
+SETUP_PAIR_NEW = "pair_new"
+SETUP_ALREADY_PAIRED = "already_paired"
 
 TRANSMIT_LOCAL = "local"
 TRANSMIT_MQTT = "mqtt"
+
+SERVICE_PAIR = "pair"
 
 DEFAULT_REPEAT = 5
 DEFAULT_INTERVAL_MS = 100

@@ -8,11 +8,11 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
-from .advertiser import AdvertiseError, BleAdvertiser, list_hci_adapters
+from .advertiser import AdvertiseError, list_hci_adapters
 from .const import (
     CONF_ADAPTER,
     CONF_DEST_ID,
@@ -25,6 +25,7 @@ from .const import (
     CONF_PROTOCOL,
     CONF_REPEAT,
     CONF_ROLLING,
+    CONF_SETUP_MODE,
     CONF_TRANSMIT,
     DEFAULT_DEST_ID,
     DEFAULT_INTERVAL_MS,
@@ -35,10 +36,18 @@ from .const import (
     DOMAIN,
     PROTOCOL_DELI,
     PROTOCOL_MESH,
+    SETUP_ALREADY_PAIRED,
+    SETUP_PAIR_NEW,
     TRANSMIT_LOCAL,
     TRANSMIT_MQTT,
 )
-from .protocol import deli_air_frames, format_rolling, generate_rolling, parse_rolling
+from .pairing import (
+    async_advertise_pair,
+    async_remember_rolling,
+    async_shared_rolling,
+    next_dest_id_for_hass,
+)
+from .protocol import format_rolling, parse_rolling
 
 _PROTOCOL_SELECTOR = selector.SelectSelector(
     selector.SelectSelectorConfig(
@@ -58,6 +67,26 @@ _TRANSMIT_SELECTOR = selector.SelectSelector(
         mode=selector.SelectSelectorMode.DROPDOWN,
     )
 )
+_SETUP_SELECTOR = selector.SelectSelector(
+    selector.SelectSelectorConfig(
+        options=[
+            selector.SelectOptionDict(value=SETUP_PAIR_NEW, label="新灯对码（灯进学习态）"),
+            selector.SelectOptionDict(
+                value=SETUP_ALREADY_PAIRED, label="已经对过码（填写滚码）"
+            ),
+        ],
+        mode=selector.SelectSelectorMode.LIST,
+    )
+)
+_PAIR_RESULT_SELECTOR = selector.SelectSelector(
+    selector.SelectSelectorConfig(
+        options=[
+            selector.SelectOptionDict(value="success", label="灯有反应，完成添加"),
+            selector.SelectOptionDict(value="retry", label="没反应，再发一次对码"),
+        ],
+        mode=selector.SelectSelectorMode.LIST,
+    )
+)
 
 
 def _adapter_selector() -> selector.SelectSelector:
@@ -72,40 +101,14 @@ def _adapter_selector() -> selector.SelectSelector:
     )
 
 
-async def _async_mqtt_publish(hass: HomeAssistant, topic: str, payload: str) -> None:
-    from homeassistant.components import mqtt
-
-    await mqtt.async_publish(hass, topic, payload, 0, False)
-
-
-async def _async_pair_now(hass: HomeAssistant, data: dict[str, Any]) -> None:
-    rolling = parse_rolling(data[CONF_ROLLING])
-    dest = int(data[CONF_DEST_ID])
-    frames = deli_air_frames("pair", rolling, dest, pid=1, timestamp=0)
-    transmit = data.get(CONF_TRANSMIT, TRANSMIT_LOCAL)
-    mqtt_publish = None
-    if transmit == TRANSMIT_MQTT:
-        mqtt_publish = lambda topic, payload: _async_mqtt_publish(hass, topic, payload)  # noqa: E731
-    advertiser = BleAdvertiser(
-        transmit=transmit,
-        adapter=str(data.get(CONF_ADAPTER) or "hci0"),
-        mqtt_topic=str(data.get(CONF_MQTT_TOPIC) or DEFAULT_MQTT_TOPIC),
-        mqtt_publish=mqtt_publish,
-    )
-    await advertiser.async_burst(
-        list(frames),
-        int(data.get(CONF_INTERVAL_MS, DEFAULT_INTERVAL_MS)),
-        int(data.get(CONF_REPEAT, DEFAULT_REPEAT)),
-    )
-
-
 class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Add a 睿信 lamp by rolling code / mesh id."""
+    """Add a 睿信 lamp by pairing or by pasting a sniffed rolling code."""
 
     VERSION = 1
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._pair_task: Any = None
 
     @staticmethod
     @callback
@@ -116,7 +119,7 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._data.update(user_input)
             if user_input[CONF_PROTOCOL] == PROTOCOL_DELI:
-                return await self.async_step_deli()
+                return await self.async_step_deli_mode()
             return await self.async_step_mesh()
         return self.async_show_form(
             step_id="user",
@@ -129,28 +132,76 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         )
 
+    async def async_step_deli_mode(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
+        if user_input is not None:
+            self._data[CONF_SETUP_MODE] = user_input[CONF_SETUP_MODE]
+            if user_input[CONF_SETUP_MODE] == SETUP_ALREADY_PAIRED:
+                return await self.async_step_deli()
+            rolling = await async_shared_rolling(self.hass)
+            self._data[CONF_ROLLING] = rolling
+            self._data[CONF_DEST_ID] = next_dest_id_for_hass(self.hass, rolling)
+            return await self.async_step_deli_pair_info()
+        return self.async_show_form(
+            step_id="deli_mode",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_SETUP_MODE, default=SETUP_PAIR_NEW): _SETUP_SELECTOR}
+            ),
+        )
+
+    async def async_step_deli_pair_info(
+        self, user_input: Optional[dict[str, Any]] = None
+    ) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                rolling = format_rolling(parse_rolling(str(user_input[CONF_ROLLING])))
+            except ValueError:
+                errors[CONF_ROLLING] = "invalid_rolling"
+            else:
+                self._data[CONF_ROLLING] = rolling
+                self._data[CONF_DEST_ID] = int(user_input[CONF_DEST_ID])
+                await async_remember_rolling(self.hass, rolling)
+                return await self._async_next_after_identity()
+        return self.async_show_form(
+            step_id="deli_pair_info",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_ROLLING, default=self._data.get(CONF_ROLLING, "")): str,
+                    vol.Required(
+                        CONF_DEST_ID, default=int(self._data.get(CONF_DEST_ID, DEFAULT_DEST_ID))
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "rolling": str(self._data.get(CONF_ROLLING, "")),
+                "dest_id": str(self._data.get(CONF_DEST_ID, DEFAULT_DEST_ID)),
+            },
+        )
+
     async def async_step_deli(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             rolling_text = str(user_input.get(CONF_ROLLING) or "").strip()
             try:
-                rolling = parse_rolling(rolling_text) if rolling_text else generate_rolling()
+                rolling = format_rolling(parse_rolling(rolling_text))
             except ValueError:
                 errors[CONF_ROLLING] = "invalid_rolling"
             else:
-                self._data[CONF_ROLLING] = format_rolling(rolling)
+                self._data[CONF_ROLLING] = rolling
                 self._data[CONF_DEST_ID] = int(user_input[CONF_DEST_ID])
-                self._data[CONF_PAIR_NOW] = bool(user_input.get(CONF_PAIR_NOW, True))
+                await async_remember_rolling(self.hass, rolling)
                 return await self._async_next_after_identity()
+        suggested = self._data.get(CONF_ROLLING) or await async_shared_rolling(self.hass)
         return self.async_show_form(
             step_id="deli",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_ROLLING, default=self._data.get(CONF_ROLLING, "")): str,
-                    vol.Required(CONF_DEST_ID, default=DEFAULT_DEST_ID): vol.All(
-                        vol.Coerce(int), vol.Range(min=1, max=255)
-                    ),
-                    vol.Optional(CONF_PAIR_NOW, default=True): bool,
+                    vol.Required(CONF_ROLLING, default=suggested): str,
+                    vol.Required(
+                        CONF_DEST_ID,
+                        default=next_dest_id_for_hass(self.hass, suggested) if suggested else DEFAULT_DEST_ID,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
                 }
             ),
             errors=errors,
@@ -198,7 +249,7 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    async def _async_finish(self) -> FlowResult:
+    async def _async_unique(self) -> None:
         protocol = self._data[CONF_PROTOCOL]
         if protocol == PROTOCOL_DELI:
             unique = f"deli-{self._data[CONF_ROLLING]}-{self._data[CONF_DEST_ID]}"
@@ -207,38 +258,67 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(unique)
         self._abort_if_unique_id_configured()
 
-        errors: dict[str, str] = {}
-        if protocol == PROTOCOL_DELI and self._data.get(CONF_PAIR_NOW):
-            try:
-                await _async_pair_now(self.hass, self._data)
-            except AdvertiseError:
-                errors["base"] = "advertise_failed"
-            except Exception:  # noqa: BLE001
-                errors["base"] = "advertise_failed"
-            if errors:
-                # Stay on a confirmation step so the user can skip pairing.
-                return await self.async_step_pair_retry(errors=errors)
-
+    async def _async_finish(self) -> FlowResult:
+        await self._async_unique()
+        if (
+            self._data.get(CONF_PROTOCOL) == PROTOCOL_DELI
+            and self._data.get(CONF_SETUP_MODE) == SETUP_PAIR_NEW
+        ):
+            return await self.async_step_pair()
         return self._create()
 
-    async def async_step_pair_retry(
-        self, user_input: Optional[dict[str, Any]] = None, errors: Optional[dict[str, str]] = None
+    async def async_step_pair(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
+        if self._pair_task is None:
+            self._pair_task = self.hass.async_create_task(async_advertise_pair(self.hass, self._data))
+        if not self._pair_task.done():
+            return self.async_show_progress(
+                step_id="pair",
+                progress_action="sending_pair",
+                progress_task=self._pair_task,
+                description_placeholders={
+                    "rolling": str(self._data.get(CONF_ROLLING, "")),
+                    "dest_id": str(self._data.get(CONF_DEST_ID, "")),
+                },
+            )
+        error = False
+        try:
+            await self._pair_task
+        except AdvertiseError:
+            error = True
+        except Exception:  # noqa: BLE001
+            error = True
+        self._pair_task = None
+        if error:
+            return self.async_show_progress_done(next_step_id="pair_failed")
+        return self.async_show_progress_done(next_step_id="pair_confirm")
+
+    async def async_step_pair_confirm(
+        self, user_input: Optional[dict[str, Any]] = None
+    ) -> FlowResult:
+        if user_input is not None:
+            if user_input.get("result") == "retry":
+                return await self.async_step_pair()
+            return self._create()
+        return self.async_show_form(
+            step_id="pair_confirm",
+            data_schema=vol.Schema({vol.Required("result", default="success"): _PAIR_RESULT_SELECTOR}),
+            description_placeholders={
+                "rolling": str(self._data.get(CONF_ROLLING, "")),
+                "dest_id": str(self._data.get(CONF_DEST_ID, "")),
+            },
+        )
+
+    async def async_step_pair_failed(
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         if user_input is not None:
             if user_input.get("retry"):
-                try:
-                    await _async_pair_now(self.hass, self._data)
-                except Exception:  # noqa: BLE001
-                    return self.async_show_form(
-                        step_id="pair_retry",
-                        data_schema=vol.Schema({vol.Required("retry", default=True): bool}),
-                        errors={"base": "advertise_failed"},
-                    )
+                return await self.async_step_pair()
             return self._create()
         return self.async_show_form(
-            step_id="pair_retry",
+            step_id="pair_failed",
             data_schema=vol.Schema({vol.Required("retry", default=True): bool}),
-            errors=errors or {},
+            errors={"base": "advertise_failed"},
         )
 
     def _create(self) -> FlowResult:
@@ -265,9 +345,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
         current = {**self._entry.data, **self._entry.options}
+        if user_input is not None:
+            pair_now = bool(user_input.pop(CONF_PAIR_NOW, False))
+            if pair_now and current.get(CONF_PROTOCOL) == PROTOCOL_DELI:
+                payload = {**current, **user_input}
+                try:
+                    await async_advertise_pair(self.hass, payload)
+                except AdvertiseError:
+                    return self.async_show_form(
+                        step_id="init",
+                        data_schema=self._schema(current),
+                        errors={"base": "advertise_failed"},
+                    )
+            return self.async_create_entry(title="", data=user_input)
+        return self.async_show_form(step_id="init", data_schema=self._schema(current))
+
+    def _schema(self, current: dict[str, Any]) -> vol.Schema:
         schema: dict[Any, Any] = {
             vol.Required(CONF_TRANSMIT, default=current.get(CONF_TRANSMIT, TRANSMIT_LOCAL)): _TRANSMIT_SELECTOR,
             vol.Optional(CONF_ADAPTER, default=current.get(CONF_ADAPTER, "hci0")): str,
@@ -289,4 +383,5 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             schema[vol.Required(CONF_DEST_ID, default=int(current.get(CONF_DEST_ID, 1)))] = vol.All(
                 vol.Coerce(int), vol.Range(min=1, max=255)
             )
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(schema))
+            schema[vol.Optional(CONF_PAIR_NOW, default=False)] = bool
+        return vol.Schema(schema)

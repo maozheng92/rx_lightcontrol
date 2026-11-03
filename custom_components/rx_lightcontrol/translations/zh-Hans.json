@@ -10,13 +10,45 @@
           "transmit": "发送方式"
         }
       },
+      "deli_mode": {
+        "title": "对码",
+        "description": "对码 = 让灯记住本机的 4 字节滚码和 destId。空中指令是 cmd=0xB4、payload=AA 66 55，HFKJ+DLKJ 各 5 次。没有应答，需要你看灯有没有闪。同一 HA 下所有照明灯共用滚码，靠 destId 1–15 区分。",
+        "data": {
+          "setup_mode": "添加方式"
+        }
+      },
+      "deli_pair_info": {
+        "title": "准备对码",
+        "description": "请把灯打到学习态（常见：墙上开关关掉再开，或重新上电；灯往往会快闪）。然后继续，Home Assistant 会广播约 1 秒。滚码 {rolling}，destId {dest_id}。",
+        "data": {
+          "rolling": "滚码",
+          "dest_id": "destId"
+        }
+      },
       "deli": {
-        "title": "照明灯身份",
-        "description": "滚码留空则按 App 规则新生成。destId 一般 1–15，255 为全开/全关。对码前请把灯打到学习态（上电或连续开关）。",
+        "title": "已经对过码",
+        "description": "填入手机 App 解出来的 4 字节滚码。不要再对码，否则手机会失效。",
         "data": {
           "rolling": "滚码（例如 6B:77:4C:09）",
-          "dest_id": "destId",
-          "pair_now": "现在发送对码帧（0xB4 AA 66 55）"
+          "dest_id": "destId"
+        }
+      },
+      "pair": {
+        "title": "正在对码",
+        "description": "正在向 destId {dest_id} 发送对码广播（滚码 {rolling}）…"
+      },
+      "pair_confirm": {
+        "title": "灯有反应吗？",
+        "description": "App 也不会收到 ACK。如果灯闪了一下、亮了或响了一声，对码就成功了。destId {dest_id}，滚码 {rolling}。",
+        "data": {
+          "result": "结果"
+        }
+      },
+      "pair_failed": {
+        "title": "无法发送广播",
+        "description": "对码帧没有发出去。修好蓝牙/MQTT 后重试，或先保存设备，稍后按「对码」按钮。",
+        "data": {
+          "retry": "现在重试对码"
         }
       },
       "mesh": {
@@ -39,14 +71,10 @@
         "data": {
           "mqtt_topic": "MQTT 主题"
         }
-      },
-      "pair_retry": {
-        "title": "无法发送广播",
-        "description": "对码帧没有发出去。修好蓝牙/MQTT 后重试，或先保存设备，稍后用「对码」按钮。",
-        "data": {
-          "retry": "现在重试对码"
-        }
       }
+    },
+    "progress": {
+      "sending_pair": "正在发送对码广播（约 1 秒）…"
     },
     "error": {
       "invalid_rolling": "滚码必须是 4 字节（8 个十六进制字符）。",
@@ -58,6 +86,9 @@
     }
   },
   "options": {
+    "error": {
+      "advertise_failed": "无法发送 BLE 广播。检查适配器，或改用 MQTT。"
+    },
     "step": {
       "init": {
         "title": "睿信灯控选项",
@@ -69,7 +100,8 @@
           "interval_ms": "每帧时长毫秒（App 为 100）",
           "min_kelvin": "最暖色温 (K)",
           "max_kelvin": "最冷色温 (K)",
-          "dest_id": "destId"
+          "dest_id": "destId",
+          "pair_now": "现在重新对码（先把灯打到学习态）"
         }
       }
     }

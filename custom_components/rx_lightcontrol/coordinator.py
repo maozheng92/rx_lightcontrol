@@ -185,6 +185,13 @@ class RxLightClient:
         )
         await self._async_burst(frames)
 
+    async def async_send_pair(self) -> None:
+        """Re-pair this destId: 0xB4 AA 66 55, then wait like the phone app."""
+        from .pairing import PAIR_SETTLE_SECONDS
+
+        await self.async_send_deli("pair")
+        await asyncio.sleep(PAIR_SETTLE_SECONDS)
+
     async def async_send_preset(self, preset: str) -> None:
         bright, cct = DELI_PRESETS[preset]
         await self.async_send_deli("brightness", _preset_level_payload(*bright))

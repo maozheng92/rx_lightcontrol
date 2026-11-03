@@ -52,4 +52,7 @@ class RxCommandButton(ButtonEntity):
         self._attr_device_info = device
 
     async def async_press(self) -> None:
+        if self._command == "pair":
+            await self._client.async_send_pair()
+            return
         await self._client.async_send_deli(self._command)
