@@ -195,5 +195,68 @@ class MeshTests(unittest.TestCase):
         self.assertEqual(len(dps), 19)
 
 
+class HaMappingTests(unittest.TestCase):
+    def test_rolling_parse_and_format(self) -> None:
+        raw = enc.parse_rolling("6B:77:4C:09")
+        self.assertEqual(raw, bytes([0x6B, 0x77, 0x4C, 0x09]))
+        self.assertEqual(enc.parse_rolling("6b774c09"), raw)
+        self.assertEqual(enc.format_rolling(raw), "6B:77:4C:09")
+        generated = enc.generate_rolling()
+        self.assertEqual(len(generated), 4)
+
+    def test_brightness_and_kelvin(self) -> None:
+        self.assertEqual(enc.ha_brightness_to_percent(255), 100)
+        self.assertEqual(enc.ha_brightness_to_percent(128), 50)
+        self.assertEqual(enc.brightness_slider_payload(80), (0, 0x03, 0x20))
+        self.assertEqual(enc.brightness_slider_payload(1), (0, 0, 1))
+        self.assertEqual(enc.cct_slider_payload(35), (0, 0x01, 0x5E))
+        self.assertEqual(enc.kelvin_to_percent(2700), 0)
+        self.assertEqual(enc.kelvin_to_percent(6500), 100)
+        self.assertEqual(enc.percent_to_kelvin(0), 2700)
+
+    def test_air_frames_match_capture(self) -> None:
+        tx0, tx1 = enc.deli_air_frames(
+            "on", [0x6B, 0x77, 0x4C, 0x09], 1, 6, timestamp=0xF73D
+        )
+        self.assertEqual(tx0[:5], bytes([0x02, 0x01, 0x01, 0x1B, 0x03]))
+        self.assertEqual(
+            tx0[5:],
+            enc.uuids_to_payload(DeliCaptureTests.HFKJ_UUIDS),
+        )
+        self.assertEqual(
+            tx1[5:],
+            enc.uuids_to_payload(DeliCaptureTests.DLKJ_UUIDS),
+        )
+
+    def test_mesh_air_frame_fits_legacy_adv(self) -> None:
+        frame = enc.encode_mesh_light("AABBCC", pid=1, power=1)
+        air = enc.mesh_air_frame(frame)
+        self.assertEqual(air[0], 0x1D)
+        self.assertEqual(air[1], 0xFF)
+        self.assertEqual(air[2:4], bytes([0x71, 0x0F]))
+        self.assertEqual(len(air), 30)
+        self.assertEqual(air[4:], frame)
+
+
+class AdvertiserJsonTests(unittest.TestCase):
+    def test_burst_json(self) -> None:
+        sys_path = __import__("sys").path
+        from pathlib import Path
+
+        cc = str(Path(__file__).resolve().parents[1] / "custom_components" / "rx_lightcontrol")
+        if cc not in sys_path:
+            sys_path.insert(0, cc)
+        from advertiser import RecordingAdvertiser, burst_json
+        import asyncio
+
+        payload = burst_json([b"\x02\x01\x01", b"\x1d\xff"], 100, 5)
+        self.assertIn('"v":1', payload)
+        self.assertIn("020101", payload)
+        recorder = RecordingAdvertiser()
+        asyncio.run(recorder.async_burst([b"\x01\x02"], 100, 5, "hci0"))
+        self.assertEqual(len(recorder.bursts), 1)
+        self.assertEqual(recorder.bursts[0]["repeat"], 5)
+
+
 if __name__ == "__main__":
     unittest.main()

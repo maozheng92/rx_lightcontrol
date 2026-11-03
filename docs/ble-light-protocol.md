@@ -13,7 +13,8 @@ APK：`rx_lightcontrol_v2.5_20251021.apk`
 
 照明灯（type 0）的对码流程、滚码/destId 和控制码表见 [zm-light-pairing-and-control.md](zm-light-pairing-and-control.md)。
 
-编码实现：[`tools/ble_light_encode.py`](../tools/ble_light_encode.py)。
+编码实现：[`tools/ble_light_encode.py`](../tools/ble_light_encode.py)（实际 codec 在 [`custom_components/rx_lightcontrol/protocol.py`](../custom_components/rx_lightcontrol/protocol.py)）。  
+Home Assistant 集成：[`docs/homeassistant.md`](homeassistant.md)。
 
 ```bash
 python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80

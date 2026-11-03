@@ -16,3 +16,10 @@ python3 tools/ble_light_encode.py deli --cmd on --rolling 12:34:56:78 --dest 1 -
 python3 tools/ble_light_encode.py deli-decode 4648,4A4B,87E1,DC4B,B674,B325,EAD0,BCB9,17B1,A4C5,1110,1312,1514
 python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80
 ```
+
+## Home Assistant
+
+自定义集成：[`custom_components/rx_lightcontrol`](custom_components/rx_lightcontrol)  
+安装与对码说明：[`docs/homeassistant.md`](docs/homeassistant.md)
+
+复制到 `config/custom_components/rx_lightcontrol/` 后重启，在「添加集成」里选 **睿信灯控**。灯控仍然是 BLE 广播：HA 主机要有蓝牙适配器，或用 MQTT 把帧交给 [`tools/mqtt_ble_advertiser.py`](tools/mqtt_ble_advertiser.py) / [`esphome/rx_light_advertiser.yaml`](esphome/rx_light_advertiser.yaml)。

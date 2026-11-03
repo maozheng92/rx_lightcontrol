@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "睿信灯控",
+        "description": "灯控走 BLE 广播，不是 GATT。Home Assistant 主机需要蓝牙适配器；没有适配器时，用 MQTT 把帧交给旁边的 tools/mqtt_ble_advertiser.py 或 ESP32。普通 bluetooth_proxy 只能收不能发。",
+        "data": {
+          "name": "名称",
+          "protocol": "产品线",
+          "transmit": "发送方式"
+        }
+      },
+      "deli": {
+        "title": "照明灯身份",
+        "description": "滚码留空则按 App 规则新生成。destId 一般 1–15，255 为全开/全关。对码前请把灯打到学习态（上电或连续开关）。",
+        "data": {
+          "rolling": "滚码（例如 6B:77:4C:09）",
+          "dest_id": "destId",
+          "pair_now": "现在发送对码帧（0xB4 AA 66 55）"
+        }
+      },
+      "mesh": {
+        "title": "Mesh 设备 ID",
+        "description": "设备 ID 前 6 位十六进制（例如 AABBCC）。",
+        "data": {
+          "dev_id": "设备 ID"
+        }
+      },
+      "adapter": {
+        "title": "蓝牙适配器",
+        "description": "用于发射的本机 HCI 适配器。HAOS 需要主机上的适配器；ESPHome bluetooth_proxy 不能发广播。",
+        "data": {
+          "adapter": "适配器"
+        }
+      },
+      "mqtt": {
+        "title": "MQTT 广播器",
+        "description": "Home Assistant 向该主题发布 JSON 突发帧。在灯旁边的 Linux 上运行 tools/mqtt_ble_advertiser.py，或使用 ESPHome 示例。",
+        "data": {
+          "mqtt_topic": "MQTT 主题"
+        }
+      },
+      "pair_retry": {
+        "title": "无法发送广播",
+        "description": "对码帧没有发出去。修好蓝牙/MQTT 后重试，或先保存设备，稍后用「对码」按钮。",
+        "data": {
+          "retry": "现在重试对码"
+        }
+      }
+    },
+    "error": {
+      "invalid_rolling": "滚码必须是 4 字节（8 个十六进制字符）。",
+      "invalid_dev_id": "设备 ID 至少 6 个十六进制字符。",
+      "advertise_failed": "无法发送 BLE 广播。检查适配器，或改用 MQTT。"
+    },
+    "abort": {
+      "already_configured": "这盏灯已经添加过了。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "睿信灯控选项",
+        "data": {
+          "transmit": "发送方式",
+          "adapter": "HCI 适配器",
+          "mqtt_topic": "MQTT 主题",
+          "repeat": "重复次数（App 为 5）",
+          "interval_ms": "每帧时长毫秒（App 为 100）",
+          "min_kelvin": "最暖色温 (K)",
+          "max_kelvin": "最冷色温 (K)",
+          "dest_id": "destId"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "pair": { "name": "对码" },
+      "night": { "name": "小夜灯" }
+    }
+  }
+}

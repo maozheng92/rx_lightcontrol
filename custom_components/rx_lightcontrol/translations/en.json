@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RuiXin lights",
+        "description": "Lights are controlled by BLE advertisements (not GATT). The Home Assistant host needs a Bluetooth adapter, or MQTT plus tools/mqtt_ble_advertiser.py next to the lamp.",
+        "data": {
+          "name": "Name",
+          "protocol": "Product line",
+          "transmit": "How to send advertisements"
+        }
+      },
+      "deli": {
+        "title": "Ceiling light identity",
+        "description": "Leave the rolling code empty to generate a new one (same as first add in the phone app). destId 1–15 is typical; 255 is group on/off. Put the lamp in learn mode before pairing.",
+        "data": {
+          "rolling": "Rolling code (6B:77:4C:09)",
+          "dest_id": "destId",
+          "pair_now": "Send pairing frame now (0xB4 AA 66 55)"
+        }
+      },
+      "mesh": {
+        "title": "Mesh device id",
+        "description": "First 6 hex characters of the mesh device id (e.g. AABBCC).",
+        "data": {
+          "dev_id": "Device ID"
+        }
+      },
+      "adapter": {
+        "title": "Bluetooth adapter",
+        "description": "Local HCI adapter used to transmit. HAOS needs the adapter on the host, not only a Bluetooth proxy (proxies cannot advertise).",
+        "data": {
+          "adapter": "Adapter"
+        }
+      },
+      "mqtt": {
+        "title": "MQTT advertiser",
+        "description": "Home Assistant publishes a JSON burst to this topic. Run tools/mqtt_ble_advertiser.py (or the ESPHome example) on a machine that can BLE-advertise next to the lamp.",
+        "data": {
+          "mqtt_topic": "MQTT topic"
+        }
+      },
+      "pair_retry": {
+        "title": "Could not advertise",
+        "description": "Pairing was not sent. Enable retry after fixing Bluetooth/MQTT, or continue and use the Pair button later.",
+        "data": {
+          "retry": "Retry pairing now"
+        }
+      }
+    },
+    "error": {
+      "invalid_rolling": "Rolling code must be 4 bytes (8 hex characters).",
+      "invalid_dev_id": "Device id needs at least 6 hex characters.",
+      "advertise_failed": "Could not send BLE advertisements. Check the adapter, or switch to MQTT."
+    },
+    "abort": {
+      "already_configured": "This lamp is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "RuiXin light options",
+        "data": {
+          "transmit": "How to send advertisements",
+          "adapter": "HCI adapter",
+          "mqtt_topic": "MQTT topic",
+          "repeat": "Repeats (app uses 5)",
+          "interval_ms": "Frame duration (ms, app uses 100)",
+          "min_kelvin": "Warmest white (K)",
+          "max_kelvin": "Coolest white (K)",
+          "dest_id": "destId"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "pair": { "name": "Pair" },
+      "night": { "name": "Night light" }
+    }
+  }
+}
