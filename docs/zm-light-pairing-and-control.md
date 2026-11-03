@@ -91,6 +91,7 @@ Java 丢掉 31 字节里的前 5 字节，把 26 字节按小端拆成 UUID 广�
 
 ```bash
 python3 tools/ble_light_encode.py deli --cmd pair --rolling 12:34:56:78 --dest 1 --pid 1 --both
+python3 tools/ble_light_encode.py deli --cmd clear --rolling 12:34:56:78 --dest 1 --pid 1 --both
 ```
 
 删除灯发的不是 `AA EE 55`，而是：

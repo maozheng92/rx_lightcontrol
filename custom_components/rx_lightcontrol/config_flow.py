@@ -22,6 +22,7 @@ from .const import (
     CONF_MIN_KELVIN,
     CONF_MQTT_TOPIC,
     CONF_PAIR_NOW,
+    CONF_UNPAIR_NOW,
     CONF_PROTOCOL,
     CONF_REPEAT,
     CONF_ROLLING,
@@ -43,6 +44,7 @@ from .const import (
 )
 from .pairing import (
     async_advertise_pair,
+    async_advertise_unpair,
     async_remember_rolling,
     async_shared_rolling,
     next_dest_id_for_hass,
@@ -347,9 +349,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
         current = {**self._entry.data, **self._entry.options}
         if user_input is not None:
+            unpair_now = bool(user_input.pop(CONF_UNPAIR_NOW, False))
             pair_now = bool(user_input.pop(CONF_PAIR_NOW, False))
+            payload = {**current, **user_input}
+            if unpair_now and current.get(CONF_PROTOCOL) == PROTOCOL_DELI:
+                try:
+                    await async_advertise_unpair(self.hass, payload)
+                except AdvertiseError:
+                    return self.async_show_form(
+                        step_id="init",
+                        data_schema=self._schema(current),
+                        errors={"base": "advertise_failed"},
+                    )
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_remove(self._entry.entry_id)
+                )
+                return self.async_create_entry(title="", data=user_input)
             if pair_now and current.get(CONF_PROTOCOL) == PROTOCOL_DELI:
-                payload = {**current, **user_input}
                 try:
                     await async_advertise_pair(self.hass, payload)
                 except AdvertiseError:
@@ -384,4 +400,5 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Coerce(int), vol.Range(min=1, max=255)
             )
             schema[vol.Optional(CONF_PAIR_NOW, default=False)] = bool
+            schema[vol.Optional(CONF_UNPAIR_NOW, default=False)] = bool
         return vol.Schema(schema)

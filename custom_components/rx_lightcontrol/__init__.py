@@ -17,6 +17,7 @@ from .const import (
     ATTR_P0,
     ATTR_P1,
     ATTR_P2,
+    ATTR_REMOVE_ENTRY,
     ATTR_SECONDS,
     CONF_PROTOCOL,
     DOMAIN,
@@ -27,6 +28,7 @@ from .const import (
     SERVICE_PAIR,
     SERVICE_SEND_COMMAND,
     SERVICE_TIMER,
+    SERVICE_UNPAIR,
 )
 from .coordinator import RxLightClient
 
@@ -180,6 +182,16 @@ def _register_services(hass: HomeAssistant) -> None:
             raise ValueError("Specify a 照明灯 device to pair")
         await client.async_send_pair()
 
+    async def _unpair(call: ServiceCall) -> None:
+        client = _client_for_device(hass, call.data.get("device_id"), call.data.get("entry_id"))
+        if client is None:
+            targets = [item for item in _clients(hass) if item.is_deli]
+            if len(targets) == 1:
+                client = targets[0]
+        if client is None or not client.is_deli:
+            raise ValueError("Specify a 照明灯 device to unpair")
+        await client.async_send_unpair(remove_entry=bool(call.data.get(ATTR_REMOVE_ENTRY, True)))
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_GROUP,
@@ -192,6 +204,18 @@ def _register_services(hass: HomeAssistant) -> None:
         _pair,
         schema=vol.Schema(
             {
+                vol.Optional("device_id"): cv.string,
+                vol.Optional("entry_id"): cv.string,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UNPAIR,
+        _unpair,
+        schema=vol.Schema(
+            {
+                vol.Optional(ATTR_REMOVE_ENTRY, default=True): cv.boolean,
                 vol.Optional("device_id"): cv.string,
                 vol.Optional("entry_id"): cv.string,
             }

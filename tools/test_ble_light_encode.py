@@ -89,6 +89,7 @@ class DeliTests(unittest.TestCase):
             ("on", (0, 0, 0)),
             ("off", (0, 0, 0)),
             ("pair", (0xAA, 0x66, 0x55)),
+            ("clear", (0, 0, 0)),
             ("brightness", (0, 0x03, 0x20)),
         ):
             _, adv0, uuids0 = enc.encode_deli_command(
@@ -249,6 +250,16 @@ class PairingTests(unittest.TestCase):
             self.assertEqual(decoded["dest_id"], 2)
             self.assertEqual(decoded["rolling"], bytes([0x6B, 0x77, 0x4C, 0x09]))
 
+    def test_clear_frames_are_b0(self) -> None:
+        for name in ("clear", "delete"):
+            tx0, tx1 = enc.deli_air_frames(name, [0x6B, 0x77, 0x4C, 0x09], 2, 1)
+            for frame in (tx0, tx1):
+                decoded = enc.decode_deli_advertise(frame[5:])
+                self.assertIsNotNone(decoded)
+                self.assertEqual(decoded["cmd"], 0xB0)
+                self.assertEqual(decoded["payload"], bytes([0, 0, 0]))
+                self.assertEqual(decoded["dest_id"], 2)
+
     def test_next_dest_id_cycles_1_to_15(self) -> None:
         from pathlib import Path
         import sys
@@ -279,7 +290,12 @@ class PairingTests(unittest.TestCase):
         if cc not in sys.path:
             sys.path.insert(0, cc)
         from advertiser import RecordingAdvertiser
-        from pairing import assert_pair_frames, async_send_pair_burst
+        from pairing import (
+            assert_clear_frames,
+            assert_pair_frames,
+            async_send_clear_burst,
+            async_send_pair_burst,
+        )
 
         recorder = RecordingAdvertiser()
         rolling = bytes([0x6B, 0x77, 0x4C, 0x09])
@@ -290,6 +306,15 @@ class PairingTests(unittest.TestCase):
         assert_pair_frames(frames, 1, rolling)
         self.assertEqual(len(recorder.bursts), 1)
         self.assertEqual(len(recorder.bursts[0]["frames"]), 2)
+
+        recorder = RecordingAdvertiser()
+        frames = asyncio.run(
+            async_send_clear_burst(recorder, rolling, 2, 8, settle_s=0)
+        )
+        assert_clear_frames(frames, 2, rolling)
+        decoded = enc.decode_deli_advertise(frames[0][5:])
+        self.assertEqual(decoded["cmd"], 0xB0)
+        self.assertEqual(decoded["payload"], bytes([0, 0, 0]))
 
 
 class AdvertiserJsonTests(unittest.TestCase):

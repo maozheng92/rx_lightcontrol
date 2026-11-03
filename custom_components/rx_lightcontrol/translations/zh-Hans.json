@@ -101,7 +101,8 @@
           "min_kelvin": "最暖色温 (K)",
           "max_kelvin": "最冷色温 (K)",
           "dest_id": "destId",
-          "pair_now": "现在重新对码（先把灯打到学习态）"
+          "pair_now": "现在重新对码（先把灯打到学习态）",
+          "unpair_now": "现在删除配对（发 0xB0）并移除本设备"
         }
       }
     }
@@ -109,6 +110,7 @@
   "entity": {
     "button": {
       "pair": { "name": "对码" },
+      "unpair": { "name": "删除配对" },
       "night": { "name": "小夜灯" }
     }
   }

@@ -192,6 +192,16 @@ class RxLightClient:
         await self.async_send_deli("pair")
         await asyncio.sleep(PAIR_SETTLE_SECONDS)
 
+    async def async_send_unpair(self, *, remove_entry: bool = True) -> None:
+        """Forget this destId: 0xB0 00 00 00 (BleManager.e()), then drop the HA entry."""
+        from .pairing import PAIR_SETTLE_SECONDS
+
+        await self.async_send_deli("clear")
+        await asyncio.sleep(PAIR_SETTLE_SECONDS)
+        if remove_entry:
+            entry_id = self.entry.entry_id
+            self.hass.async_create_task(self.hass.config_entries.async_remove(entry_id))
+
     async def async_send_preset(self, preset: str) -> None:
         bright, cct = DELI_PRESETS[preset]
         await self.async_send_deli("brightness", _preset_level_payload(*bright))

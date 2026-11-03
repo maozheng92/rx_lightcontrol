@@ -43,6 +43,14 @@
 - 服务 `rx_lightcontrol.pair`
 - 集成选项里的「现在重新对码」
 
+### 删除配对
+
+和 App 删除灯一样：先广播 `cmd=0xB0` `payload=00 00 00`，再从本机列表去掉这盏灯。**不是** 天境灯的 `0xB4 AA EE 55`。
+
+- 设备上的 **删除配对** 按钮：发 `0xB0` 后移除 HA 设备
+- 服务 `rx_lightcontrol.unpair`（`remove_entry` 默认 true；设 false 只让灯忘掉，HA 实体还在，方便重新对码）
+- 集成选项里的「现在删除配对并移除本设备」
+
 `destId` 255 是 App 首页「全开/全关」，不要拿来当单灯对码。
 
 发送方式：
@@ -61,6 +69,7 @@
 | `light.*` | 开/关（`0xB3` / `0xB2`）、亮度（`0xB5`，滑条百分数 ×10）、色温（`0xB7`，百分数 ×10） |
 | 效果 | 温馨/阅读/会客/日光/月光/娱乐、小夜灯、分段 1–3、全亮/办公/护眼/儿童 |
 | `button.*_pair` | 再发对码 `0xB4 AA 66 55` |
+| `button.*_unpair` | 删除配对 `0xB0 00 00 00`，然后移除本设备 |
 | `button.*_night` | 小夜灯 `0xA1 19 19 00`（灯端自翻） |
 
 家庭 Mesh（类型 2001）只有灯实体：开关、亮度 1–100、色温、RGB。整包 DPS 重发，公司 ID `0x0F71`。
@@ -68,6 +77,8 @@
 服务：
 
 - `rx_lightcontrol.send_command` — 任意 DELI 命令名 + 三字节 payload
+- `rx_lightcontrol.pair` — 再发对码
+- `rx_lightcontrol.unpair` — 删除配对（默认同时移除 HA 设备）
 - `rx_lightcontrol.timer` — `0xA5` 时/分/秒，全 0 取消
 - `rx_lightcontrol.group` — destId 255 全开/全关
 

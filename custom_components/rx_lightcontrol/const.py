@@ -21,6 +21,7 @@ CONF_INTERVAL_MS = "interval_ms"
 CONF_MIN_KELVIN = "min_kelvin"
 CONF_MAX_KELVIN = "max_kelvin"
 CONF_PAIR_NOW = "pair_now"
+CONF_UNPAIR_NOW = "unpair_now"
 CONF_SETUP_MODE = "setup_mode"
 
 SETUP_PAIR_NEW = "pair_new"
@@ -30,6 +31,7 @@ TRANSMIT_LOCAL = "local"
 TRANSMIT_MQTT = "mqtt"
 
 SERVICE_PAIR = "pair"
+SERVICE_UNPAIR = "unpair"
 
 DEFAULT_REPEAT = 5
 DEFAULT_INTERVAL_MS = 100
@@ -50,6 +52,7 @@ ATTR_HOURS = "hours"
 ATTR_MINUTES = "minutes"
 ATTR_SECONDS = "seconds"
 ATTR_GROUP = "group"
+ATTR_REMOVE_ENTRY = "remove_entry"
 
 SERVICE_SEND_COMMAND = "send_command"
 SERVICE_TIMER = "timer"

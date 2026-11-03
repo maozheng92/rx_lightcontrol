@@ -47,6 +47,7 @@ DELI_CMD = {
     "pair": 0xB4,
     "unpair": 0xB4,
     "clear": 0xB0,
+    "delete": 0xB0,
     "query": 0xB0,
     "off": 0xB2,
     "on": 0xB3,
@@ -72,13 +73,15 @@ DELI_CMD = {
 # Default 3-byte payloads when the caller does not pass one.
 DELI_DEFAULT_PAYLOAD = {
     "pair": (0xAA, 0x66, 0x55),
-    "unpair": (0xAA, 0xEE, 0x55),
+    "unpair": (0xAA, 0xEE, 0x55),  # 天境灯添加，不是照明灯删除
+    "clear": (0, 0, 0),
+    "delete": (0, 0, 0),
     "night": (25, 25, 0),
 }
 
 DELI_CMD_NAME = {
     0xB4: "pair/unpair",
-    0xB0: "clear",
+    0xB0: "clear/delete",
     0xB2: "off",
     0xB3: "on",
     0xB5: "brightness",

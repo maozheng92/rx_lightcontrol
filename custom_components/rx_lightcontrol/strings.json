@@ -101,7 +101,8 @@
           "min_kelvin": "Warmest white (K)",
           "max_kelvin": "Coolest white (K)",
           "dest_id": "destId",
-          "pair_now": "Re-pair now (put the lamp in learn mode first)"
+          "pair_now": "Re-pair now (put the lamp in learn mode first)",
+          "unpair_now": "Delete pairing now (0xB0) and remove this device"
         }
       }
     }
@@ -109,6 +110,7 @@
   "entity": {
     "button": {
       "pair": { "name": "Pair" },
+      "unpair": { "name": "Delete pairing" },
       "night": { "name": "Night light" }
     }
   },
@@ -128,6 +130,10 @@
     "pair": {
       "name": "Pair",
       "description": "Send the 0xB4 AA 66 55 pairing advertisements."
+    },
+    "unpair": {
+      "name": "Delete pairing",
+      "description": "Send 0xB0 00 00 00 and remove the device from Home Assistant."
     }
   }
 }

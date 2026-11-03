@@ -90,3 +90,18 @@ pair:
       selector:
         device:
           integration: rx_lightcontrol
+
+unpair:
+  name: Delete pairing
+  description: Send 0xB0 00 00 00 (app delete) and remove the Home Assistant device.
+  fields:
+    remove_entry:
+      name: Remove from Home Assistant
+      default: true
+      selector:
+        boolean:
+    device_id:
+      name: Device ID
+      selector:
+        device:
+          integration: rx_lightcontrol

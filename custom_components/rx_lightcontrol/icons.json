@@ -2,6 +2,7 @@
   "entity": {
     "button": {
       "pair": { "default": "mdi:link-variant-plus" },
+      "unpair": { "default": "mdi:link-variant-off" },
       "night": { "default": "mdi:weather-night" }
     },
     "light": {
