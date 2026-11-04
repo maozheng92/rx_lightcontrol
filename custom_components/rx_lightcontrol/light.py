@@ -1,7 +1,8 @@
-"""Assumed-state light entities for DELI 照明灯 and mesh type-2001 lamps."""
+"""Light entities for DELI 照明灯 and mesh type-2001 lamps."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.light import (
@@ -14,9 +15,13 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import STATE_ON
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DELI_EFFECTS,
@@ -26,6 +31,7 @@ from .const import (
     MANUFACTURER,
     MODEL_DELI,
     MODEL_MESH,
+    signal_light_state,
 )
 from .coordinator import RxLightClient
 from .protocol import (
@@ -45,12 +51,11 @@ async def async_setup_entry(
     async_add_entities([RxLight(client)])
 
 
-class RxLight(LightEntity):
-    """One-way BLE advertise light. State is whatever we last sent."""
+class RxLight(RestoreEntity, LightEntity):
+    """BLE advertise light. State is restored, then updated from sniffed ads."""
 
     _attr_has_entity_name = True
     _attr_name = None
-    _attr_assumed_state = True
     _attr_should_poll = False
     _attr_translation_key = "light"
 
@@ -63,6 +68,8 @@ class RxLight(LightEntity):
         self._attr_min_color_temp_kelvin = client.min_kelvin
         self._attr_max_color_temp_kelvin = client.max_kelvin
         self._attr_effect = EFFECT_OFF
+        self._state_source = "unknown"
+        self._last_seen: datetime | None = None
         if client.is_deli:
             self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
             self._attr_color_mode = ColorMode.COLOR_TEMP
@@ -79,6 +86,61 @@ class RxLight(LightEntity):
             name=client.entry.title,
         )
 
+    @property
+    def assumed_state(self) -> bool:
+        return self._state_source != "ble"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None:
+            self._attr_is_on = last.state == STATE_ON
+            brightness = last.attributes.get("brightness")
+            if brightness is not None:
+                self._attr_brightness = int(brightness)
+            kelvin = last.attributes.get("color_temp_kelvin")
+            if kelvin is not None:
+                self._attr_color_temp_kelvin = int(kelvin)
+            rgb = last.attributes.get("rgb_color")
+            if rgb is not None:
+                self._attr_rgb_color = tuple(int(v) for v in rgb)  # type: ignore[assignment]
+            effect = last.attributes.get("effect")
+            if effect:
+                self._attr_effect = effect
+            self._state_source = "restored"
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_light_state(self._client.entry.entry_id),
+                self._async_apply_remote,
+            )
+        )
+
+    @callback
+    def _async_apply_remote(self, state: dict[str, Any]) -> None:
+        if "is_on" in state:
+            self._attr_is_on = bool(state["is_on"])
+        if "brightness_percent" in state:
+            self._attr_brightness = percent_to_ha_brightness(int(state["brightness_percent"]))
+        if "cct_percent" in state:
+            self._attr_color_temp_kelvin = percent_to_kelvin(
+                int(state["cct_percent"]),
+                self.min_color_temp_kelvin,
+                self.max_color_temp_kelvin,
+            )
+            self._attr_color_mode = ColorMode.COLOR_TEMP
+        if "rgb_color" in state:
+            self._attr_rgb_color = tuple(int(v) for v in state["rgb_color"])  # type: ignore[assignment]
+            if self._attr_supported_color_modes and ColorMode.RGB in self._attr_supported_color_modes:
+                self._attr_color_mode = ColorMode.RGB
+        if "effect" in state:
+            self._attr_effect = state["effect"]
+        elif "is_on" in state:
+            self._attr_effect = EFFECT_OFF
+        self._state_source = str(state.get("source") or "ble")
+        self._last_seen = dt_util.utcnow()
+        self.async_write_ha_state()
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         brightness = kwargs.get(ATTR_BRIGHTNESS)
         kelvin = kwargs.get(ATTR_COLOR_TEMP_KELVIN)
@@ -90,6 +152,7 @@ class RxLight(LightEntity):
                 await self._async_apply_effect(effect)
                 self._attr_is_on = True
                 self._attr_effect = effect
+                self._state_source = "command"
                 self.async_write_ha_state()
                 return
             was_off = not self._attr_is_on
@@ -108,6 +171,7 @@ class RxLight(LightEntity):
             self._attr_is_on = True
             self._attr_color_mode = ColorMode.COLOR_TEMP
             self._attr_effect = EFFECT_OFF
+            self._state_source = "command"
             self.async_write_ha_state()
             return
 
@@ -130,6 +194,7 @@ class RxLight(LightEntity):
             kwargs_mesh.update(red=rgb[0], green=rgb[1], blue=rgb[2])
         await self._client.async_send_mesh(**kwargs_mesh)
         self._attr_is_on = True
+        self._state_source = "command"
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -139,6 +204,7 @@ class RxLight(LightEntity):
             await self._client.async_send_mesh(power=0)
         self._attr_is_on = False
         self._attr_effect = EFFECT_OFF
+        self._state_source = "command"
         self.async_write_ha_state()
 
     async def _async_apply_effect(self, effect: str) -> None:
@@ -156,7 +222,12 @@ class RxLight(LightEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        attrs: dict[str, Any] = {"protocol": self._client.protocol}
+        attrs: dict[str, Any] = {
+            "protocol": self._client.protocol,
+            "state_source": self._state_source,
+        }
+        if self._last_seen is not None:
+            attrs["last_seen"] = self._last_seen.isoformat()
         if self._client.is_deli:
             attrs["rolling"] = self._client.entry.data.get("rolling")
             attrs["dest_id"] = self._client.dest_id

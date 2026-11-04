@@ -187,6 +187,42 @@ class MeshTests(unittest.TestCase):
         enc.mesh_stream_cipher(work)
         self.assertEqual(bytes(work), bytes(original))
 
+    def test_mesh_decode_roundtrip(self) -> None:
+        frame = enc.encode_mesh_light(
+            "AABBCC", pid=9, power=1, brightness=80, temperature=40, red=10, green=20, blue=30
+        )
+        decoded = enc.decode_mesh_frame(frame)
+        self.assertIsNotNone(decoded)
+        self.assertEqual(decoded["dev_id"], "AABBCC")
+        self.assertEqual(decoded["pid"], 9)
+        self.assertEqual(decoded["power"], 1)
+        self.assertEqual(decoded["brightness"], 80)
+        self.assertEqual(decoded["temperature"], 40)
+        self.assertEqual((decoded["red"], decoded["green"], decoded["blue"]), (10, 20, 30))
+
+    def test_decode_ble_advertisement_mesh_and_deli(self) -> None:
+        mesh = enc.encode_mesh_light("010203", pid=2, power=0, brightness=50, temperature=10)
+        air = enc.mesh_air_frame(mesh)
+        decoded = enc.decode_ble_advertisement(raw=air)
+        self.assertEqual(decoded["family"], "mesh")
+        self.assertEqual(decoded["dev_id"], "010203")
+        self.assertEqual(decoded["power"], 0)
+
+        tx0, _ = enc.deli_air_frames("on", [0x6B, 0x77, 0x4C, 0x09], 1, 6, timestamp=0xF73D)
+        decoded = enc.decode_ble_advertisement(raw=tx0)
+        self.assertEqual(decoded["family"], "deli")
+        self.assertEqual(decoded["cmd"], 0xB3)
+        self.assertEqual(decoded["dest_id"], 1)
+
+        uuids = enc.deli_service_uuids(tx0[5:])
+        decoded = enc.decode_ble_advertisement(service_uuids=uuids)
+        self.assertEqual(decoded["cmd"], 0xB3)
+
+    def test_slider_payload_to_percent(self) -> None:
+        self.assertEqual(enc.slider_payload_to_percent((0, 0x03, 0x20)), 80)
+        self.assertEqual(enc.slider_payload_to_percent((0, 0, 100)), 100)
+        self.assertEqual(enc.slider_payload_to_percent((0, 0, 1)), 1)
+
     def test_dps_layout(self) -> None:
         dps = enc.build_light_dps(
             power=1, brightness=80, temperature=40, auxiliary=1, red=10, green=20, blue=30

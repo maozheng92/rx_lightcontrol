@@ -2,7 +2,14 @@
 
 自定义集成目录：[`custom_components/rx_lightcontrol`](../custom_components/rx_lightcontrol)。
 
-灯只听 **BLE 广播**，没有状态回读。实体是 `assumed_state`：HA 显示的是上次发出去的命令。
+灯控走 BLE **广播**。实体会：
+
+- 重启后恢复上次开关/亮度/色温（`RestoreEntity`）
+- 扫描空中的控制帧来同步状态：照明灯听 HFKJ/DLKJ（手机、遥控器、另一台 HA 发出的命令）；家庭 Mesh 听厂家数据 `0x0F71`（灯自己也会周期性广播 DPS）
+
+没有扫到广播时仍是 assumed-state。属性 `state_source` 为 `ble` / `command` / `restored`。
+
+集成图标放在 `custom_components/rx_lightcontrol/brand/`（Home Assistant **2026.3** 起在「设备与服务」里显示；更早版本仍用根目录 `icon.png` 给 HACS）。
 
 这和 [ha-ble-adv](https://github.com/NicoIIT/ha-ble-adv) 里的「RuiXin」编码不是同一套协议。那边是 `RXK` 短包；本仓库对应 App `com.deep.smartmeicontrol` 的 **HFKJ/DLKJ（DELI）** 和家庭 Mesh `0x0F71`。
 
@@ -14,7 +21,7 @@
 
 **设置 → 设备与服务 → 添加集成 → 睿信灯控**
 
-也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.1.1）。仓库根目录的 `icon.png` 来自 App 启动图标，会显示在 HACS 里。
+也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.2.0）。仓库根目录的 `icon.png` 来自 App 启动图标，会显示在 HACS 里。
 
 最低：Home Assistant 2024.8。主机需要：
 
@@ -119,7 +126,8 @@ python3 tools/ble_light_encode.py deli-decode \
 
 ## 6. 限制
 
-- 没有状态回读；墙开、遥控器、手机 App 改灯后，HA 不会自动变。
+- 照明灯本身不回状态。墙开如果只走市电、不发 BLE，HA 看不到。手机 App / 遥控器发出的 HFKJ/DLKJ 广播，本机或 `bluetooth_proxy` 扫到后会同步。
+- 集成图标需要 Home Assistant 2026.3+（`brand/` 目录）。更早版本 HACS 列表能看到图标，「添加集成」卡片可能仍是默认拼图。
 - 本机 HCI 和 BlueZ 扫描可能抢适配器。若打不开灯，改用 MQTT 专用适配器，或暂时关掉其它占用。
 - Mesh 厂家数据加 flags 会超过 31 字节，因此 mesh 帧不带 flags，只发 Manufacturer Specific。
 - 色温 Kelvin 范围默认 2700–6500，只是 UI 映射；DELI 协议本身是 0–100。

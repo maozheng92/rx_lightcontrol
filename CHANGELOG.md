@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 — 2026-11-04
+
+- 集成图标放到 `custom_components/rx_lightcontrol/brand/`（HA 2026.3+ 在设置里显示 App 启动图标）
+- 灯实体重启后恢复上次状态
+- 扫描 BLE 广播同步开关/亮度/色温：照明灯 HFKJ/DLKJ，Mesh `0x0F71`
+- 属性 `state_source`、`last_seen`
+
 ## 1.1.1 — 2026-11-04
 
 - `icon.png` 改为 App 安装包里的启动图标（`res/mipmap/logo_launcher.png`，房子 + Wi‑Fi）。

@@ -492,6 +492,122 @@ def encode_mesh_light(dev_id: str, pid: int = 1, **dps_kwargs) -> bytes:
     return encode_mesh_frame(dev_id, build_light_dps(**dps_kwargs), pid)
 
 
+def decode_mesh_frame(frame: bytes) -> Optional[Dict]:
+    """Undo encode_mesh_frame. `frame` is the 26-byte manufacturer payload."""
+    if len(frame) != 26:
+        return None
+    if frame[0] != MESH_HEADER[0] or frame[1] != MESH_HEADER[1]:
+        return None
+    check = bytearray(frame)
+    check[6] = 0
+    if _u8(crc16_ccitt_false(bytes(check))) != frame[6]:
+        return None
+    pid = frame[5]
+    stream = bytearray(MESH_SBOX[b] for b in frame[7:26])
+    mesh_stream_cipher(stream, MESH_LFSR_KEY)
+    dps = bytes(_u8(b - pid) for b in stream)
+    if dps[0] != 0x77:
+        return None
+    return {
+        "dev_id": dps_dev_id(frame[2:5]),
+        "pid": pid,
+        "power": dps[2],
+        "brightness": dps[3],
+        "temperature": dps[4],
+        "auxiliary": dps[5],
+        "red": dps[6],
+        "green": dps[7],
+        "blue": dps[8],
+        "dps": dps,
+    }
+
+
+def dps_dev_id(raw: bytes) -> str:
+    return raw[:3].hex().upper()
+
+
+DELI_HFKJ_UUID = "00004648-0000-1000-8000-00805f9b34fb"
+DELI_DLKJ_UUID = "00004c44-0000-1000-8000-00805f9b34fb"
+
+
+def iter_ad_structures(data: bytes):
+    index = 0
+    while index < len(data):
+        length = data[index]
+        if length == 0 or index + 1 + length > len(data):
+            break
+        yield data[index + 1], data[index + 2 : index + 1 + length]
+        index += 1 + length
+
+
+def decode_ble_advertisement(
+    raw: Optional[bytes] = None,
+    service_uuids: Optional[Sequence[str]] = None,
+    manufacturer_data: Optional[Dict[int, bytes]] = None,
+) -> Optional[Dict]:
+    """Decode a scanned BLE advertisement into a DELI or mesh command."""
+    if raw:
+        for ad_type, payload in iter_ad_structures(raw):
+            if ad_type in (0x02, 0x03) and len(payload) >= 26:
+                decoded = decode_deli_advertise(payload[:26])
+                if decoded:
+                    decoded["family"] = "deli"
+                    return decoded
+            if ad_type == 0xFF and len(payload) >= 28:
+                company = payload[0] | (payload[1] << 8)
+                if company == MESH_COMPANY_ID:
+                    decoded = decode_mesh_frame(payload[2:28])
+                    if decoded:
+                        decoded["family"] = "mesh"
+                        return decoded
+    if manufacturer_data:
+        blob = manufacturer_data.get(MESH_COMPANY_ID)
+        if blob and len(blob) >= 26:
+            decoded = decode_mesh_frame(bytes(blob[:26]))
+            if decoded:
+                decoded["family"] = "mesh"
+                return decoded
+    if service_uuids:
+        decoded = decode_deli_from_service_uuids(service_uuids)
+        if decoded:
+            decoded["family"] = "deli"
+            return decoded
+    return None
+
+
+def decode_deli_from_service_uuids(uuids: Sequence[str]) -> Optional[Dict]:
+    shorts: List[str] = []
+    for item in uuids:
+        token = item.strip().lower().replace("urn:uuid:", "")
+        if token.startswith("0000") and token.endswith("0000-1000-8000-00805f9b34fb"):
+            shorts.append(token[4:8])
+        elif len(token) == 4:
+            shorts.append(token)
+    if len(shorts) < 13:
+        return None
+    for sequence in (shorts, list(reversed(shorts))):
+        for start in range(0, len(sequence) - 12):
+            window = sequence[start : start + 13]
+            try:
+                payload = uuids_to_payload(window)
+            except ValueError:
+                continue
+            decoded = decode_deli_advertise(payload)
+            if decoded:
+                return decoded
+    return None
+
+
+def slider_payload_to_percent(payload: Sequence[int]) -> int:
+    """Inverse of brightness_slider_payload / cct_slider_payload."""
+    if len(payload) < 3:
+        return 0
+    value = ((int(payload[1]) & 0xFF) << 8) | (int(payload[2]) & 0xFF)
+    if value > 100:
+        return max(0, min(100, int(round(value / 10))))
+    return max(0, min(100, value))
+
+
 def hexdump(data: bytes) -> str:
     return " ".join(f"{b:02X}" for b in data)
 

@@ -1,7 +1,7 @@
 {
   "domain": "rx_lightcontrol",
   "name": "睿信灯控",
-  "after_dependencies": ["mqtt"],
+  "after_dependencies": ["mqtt", "bluetooth"],
   "codeowners": ["@maozheng92"],
   "config_flow": true,
   "documentation": "https://github.com/maozheng92/rx_lightcontrol/blob/main/docs/homeassistant.md",
@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/maozheng92/rx_lightcontrol/issues",
   "loggers": ["custom_components.rx_lightcontrol"],
   "requirements": [],
-  "version": "1.1.1"
+  "version": "1.2.0"
 }
