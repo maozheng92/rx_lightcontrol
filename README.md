@@ -16,7 +16,7 @@
 - [两套 BLE 广播协议总表](docs/ble-light-protocol.md)
 - [Home Assistant 安装与对码](docs/homeassistant.md)
 
-当前正式版：**v1.1.1**
+当前正式版：**v1.2.0**
 
 生成空中 payload：
 

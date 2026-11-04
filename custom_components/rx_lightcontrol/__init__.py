@@ -31,6 +31,7 @@ from .const import (
     SERVICE_UNPAIR,
 )
 from .coordinator import RxLightClient
+from .scanner import async_maybe_stop_scanner, async_setup_scanner
 
 
 def _platforms(entry: ConfigEntry) -> tuple[str, ...]:
@@ -49,6 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     client = RxLightClient(hass, entry)
     await client.async_setup()
     hass.data[DOMAIN][entry.entry_id] = client
+    await async_setup_scanner(hass)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, _platforms(entry))
     _register_services(hass)
@@ -59,6 +61,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, _platforms(entry))
     if unloaded:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        await async_maybe_stop_scanner(hass)
     return unloaded
 
 

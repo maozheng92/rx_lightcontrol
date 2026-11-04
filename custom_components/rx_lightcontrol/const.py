@@ -6,6 +6,9 @@ DOMAIN = "rx_lightcontrol"
 PLATFORMS_DELI = ("light", "button")
 PLATFORMS_MESH = ("light",)
 
+def signal_light_state(entry_id: str) -> str:
+    return f"{DOMAIN}_state_{entry_id}"
+
 PROTOCOL_DELI = "deli"
 PROTOCOL_MESH = "mesh"
 

@@ -23,4 +23,5 @@ async def async_get_config_entry_diagnostics(
         "interval_ms": getattr(client, "interval_ms", None),
         "transmit": getattr(getattr(client, "advertiser", None), "transmit", None),
         "adapter": getattr(getattr(client, "advertiser", None), "adapter", None),
+        "scanner": "scanner" in hass.data.get(DOMAIN, {}),
     }
