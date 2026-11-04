@@ -14,7 +14,7 @@
 
 **设置 → 设备与服务 → 添加集成 → 睿信灯控**
 
-也可以用 HACS 以自定义仓库方式加入本 GitHub 仓库。
+也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.1.0）。仓库根目录的 `icon.png` 会显示在 HACS 里。
 
 最低：Home Assistant 2024.8。主机需要：
 
