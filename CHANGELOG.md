@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 — 2026-11-04
+
+- `icon.png` 改为 App 安装包里的启动图标（`res/mipmap/logo_launcher.png`，房子 + Wi‑Fi）。
+
 ## 1.1.0 — 2026-11-04
 
 首个正式 GitHub Release。
