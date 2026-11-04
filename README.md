@@ -1,4 +1,12 @@
-# rx_lightcontrol
+<p align="center">
+  <img src="icon.png" width="128" height="128" alt="睿信灯控">
+</p>
+
+<h1 align="center">睿信灯控</h1>
+
+<p align="center">
+  Home Assistant 自定义集成 · BLE 广播控灯 · HACS
+</p>
 
 睿信灯控 App `rx_lightcontrol_v2.5_20251021.apk`（包名 `com.deep.smartmeicontrol`）。
 
@@ -6,6 +14,9 @@
 
 - [照明灯对码过程与控制码](docs/zm-light-pairing-and-control.md)
 - [两套 BLE 广播协议总表](docs/ble-light-protocol.md)
+- [Home Assistant 安装与对码](docs/homeassistant.md)
+
+当前正式版：**v1.1.0**
 
 生成空中 payload：
 
@@ -20,7 +31,15 @@ python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80
 
 ## Home Assistant
 
-自定义集成：[`custom_components/rx_lightcontrol`](custom_components/rx_lightcontrol)  
-安装与对码说明：[`docs/homeassistant.md`](docs/homeassistant.md)
+自定义集成：[`custom_components/rx_lightcontrol`](custom_components/rx_lightcontrol)
 
-复制到 `config/custom_components/rx_lightcontrol/` 后重启，在「添加集成」里选 **睿信灯控**。灯控仍然是 BLE 广播：HA 主机要有蓝牙适配器，或用 MQTT 把帧交给 [`tools/mqtt_ble_advertiser.py`](tools/mqtt_ble_advertiser.py) / [`esphome/rx_light_advertiser.yaml`](esphome/rx_light_advertiser.yaml)。
+### HACS
+
+1. HACS → 自定义仓库 → 添加 `https://github.com/maozheng92/rx_lightcontrol`，类型选 **Integration**
+2. 搜索 **睿信灯控** 并下载
+3. 重启 Home Assistant
+4. **设置 → 设备与服务 → 添加集成 → 睿信灯控**
+
+也可以手动复制 `custom_components/rx_lightcontrol` 到 `config/custom_components/rx_lightcontrol/` 后重启。
+
+灯控仍然是 BLE 广播：HA 主机要有蓝牙适配器，或用 MQTT 把帧交给 [`tools/mqtt_ble_advertiser.py`](tools/mqtt_ble_advertiser.py) / [`esphome/rx_light_advertiser.yaml`](esphome/rx_light_advertiser.yaml)。普通 ESPHome `bluetooth_proxy` 只能扫描，不能发广播。
