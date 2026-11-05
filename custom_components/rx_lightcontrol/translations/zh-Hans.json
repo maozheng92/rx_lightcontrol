@@ -102,7 +102,13 @@
           "max_kelvin": "最冷色温 (K)",
           "dest_id": "destId",
           "pair_now": "现在重新对码（先把灯打到学习态）",
-          "unpair_now": "现在删除配对（发 0xB0）并移除本设备"
+          "unpair_now": "现在删除配对（发 0xB0）并移除本设备",
+          "power_entity": "电源实体（用灯/开关代替 BLE 开/关）",
+          "power_ble_follow": "电源实体打开后再补发 BLE 开灯"
+        },
+        "data_description": {
+          "power_entity": "可选。已经进 Home Assistant 的墙开或智能灯/开关。本集成的开/关会去拨那个实体，不再发 BLE 0xB3/0xB2。亮度、色温、场景仍走 BLE。",
+          "power_ble_follow": "电源实体从关到开时（包括人去扳墙开），稍等后再补发一次 BLE 开灯，避免灯还停在上次的关闭状态。"
         }
       }
     }

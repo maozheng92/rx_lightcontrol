@@ -25,6 +25,8 @@ CONF_MIN_KELVIN = "min_kelvin"
 CONF_MAX_KELVIN = "max_kelvin"
 CONF_PAIR_NOW = "pair_now"
 CONF_UNPAIR_NOW = "unpair_now"
+CONF_POWER_ENTITY = "power_entity"
+CONF_POWER_BLE_FOLLOW = "power_ble_follow"
 CONF_SETUP_MODE = "setup_mode"
 
 SETUP_PAIR_NEW = "pair_new"
@@ -42,6 +44,8 @@ DEFAULT_MQTT_TOPIC = "rx_lightcontrol/advertise"
 DEFAULT_MIN_KELVIN = 2700
 DEFAULT_MAX_KELVIN = 6500
 DEFAULT_DEST_ID = 1
+POWER_SETTLE_SECONDS = 0.6
+DEFAULT_POWER_BLE_FOLLOW = True
 
 MANUFACTURER = "睿信"
 MODEL_DELI = "照明灯"

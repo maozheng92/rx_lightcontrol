@@ -10,7 +10,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import selector
+from homeassistant.helpers import entity_registry as er, selector
 
 from .advertiser import AdvertiseError, list_hci_adapters
 from .const import (
@@ -22,6 +22,8 @@ from .const import (
     CONF_MIN_KELVIN,
     CONF_MQTT_TOPIC,
     CONF_PAIR_NOW,
+    CONF_POWER_BLE_FOLLOW,
+    CONF_POWER_ENTITY,
     CONF_UNPAIR_NOW,
     CONF_PROTOCOL,
     CONF_REPEAT,
@@ -33,6 +35,7 @@ from .const import (
     DEFAULT_MAX_KELVIN,
     DEFAULT_MIN_KELVIN,
     DEFAULT_MQTT_TOPIC,
+    DEFAULT_POWER_BLE_FOLLOW,
     DEFAULT_REPEAT,
     DOMAIN,
     PROTOCOL_DELI,
@@ -351,6 +354,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             unpair_now = bool(user_input.pop(CONF_UNPAIR_NOW, False))
             pair_now = bool(user_input.pop(CONF_PAIR_NOW, False))
+            power = str(user_input.get(CONF_POWER_ENTITY) or "").strip()
+            if power:
+                user_input[CONF_POWER_ENTITY] = power
+            else:
+                user_input.pop(CONF_POWER_ENTITY, None)
             payload = {**current, **user_input}
             if unpair_now and current.get(CONF_PROTOCOL) == PROTOCOL_DELI:
                 try:
@@ -394,6 +402,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(
                 CONF_MAX_KELVIN, default=int(current.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN))
             ): vol.All(vol.Coerce(int), vol.Range(min=4000, max=7000)),
+            (
+                vol.Optional(
+                    CONF_POWER_ENTITY,
+                    description={"suggested_value": current[CONF_POWER_ENTITY]},
+                )
+                if current.get(CONF_POWER_ENTITY)
+                else vol.Optional(CONF_POWER_ENTITY)
+            ): self._power_selector(),
+            vol.Optional(
+                CONF_POWER_BLE_FOLLOW,
+                default=bool(current.get(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW)),
+            ): bool,
         }
         if current.get(CONF_PROTOCOL) == PROTOCOL_DELI:
             schema[vol.Required(CONF_DEST_ID, default=int(current.get(CONF_DEST_ID, 1)))] = vol.All(
@@ -402,3 +422,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             schema[vol.Optional(CONF_PAIR_NOW, default=False)] = bool
             schema[vol.Optional(CONF_UNPAIR_NOW, default=False)] = bool
         return vol.Schema(schema)
+
+    def _power_selector(self) -> selector.EntitySelector:
+        registry = er.async_get(self.hass)
+        exclude = [
+            item.entity_id
+            for item in er.async_entries_for_config_entry(registry, self._entry.entry_id)
+        ]
+        return selector.EntitySelector(
+            selector.EntitySelectorConfig(
+                domain=["light", "switch"],
+                exclude_entities=exclude,
+                multiple=False,
+            )
+        )

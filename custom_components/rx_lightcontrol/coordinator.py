@@ -19,6 +19,8 @@ from .const import (
     CONF_MAX_KELVIN,
     CONF_MIN_KELVIN,
     CONF_MQTT_TOPIC,
+    CONF_POWER_BLE_FOLLOW,
+    CONF_POWER_ENTITY,
     CONF_PROTOCOL,
     CONF_REPEAT,
     CONF_ROLLING,
@@ -27,6 +29,7 @@ from .const import (
     DEFAULT_MAX_KELVIN,
     DEFAULT_MIN_KELVIN,
     DEFAULT_MQTT_TOPIC,
+    DEFAULT_POWER_BLE_FOLLOW,
     DEFAULT_REPEAT,
     DELI_PRESETS,
     DOMAIN,
@@ -136,6 +139,16 @@ class RxLightClient:
     @property
     def interval_ms(self) -> int:
         return int(self.entry.options.get(CONF_INTERVAL_MS, self.entry.data.get(CONF_INTERVAL_MS, DEFAULT_INTERVAL_MS)))
+
+    @property
+    def power_entity(self) -> Optional[str]:
+        value = self._cfg(CONF_POWER_ENTITY, "")
+        text = str(value or "").strip()
+        return text or None
+
+    @property
+    def power_ble_follow(self) -> bool:
+        return bool(self._cfg(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW))
 
     def _cfg(self, key: str, default: Any = None) -> Any:
         if key in self.entry.options:

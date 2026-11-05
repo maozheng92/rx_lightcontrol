@@ -102,7 +102,13 @@
           "max_kelvin": "Coolest white (K)",
           "dest_id": "destId",
           "pair_now": "Re-pair now (put the lamp in learn mode first)",
-          "unpair_now": "Delete pairing now (0xB0) and remove this device"
+          "unpair_now": "Delete pairing now (0xB0) and remove this device",
+          "power_entity": "Power entity (replaces BLE on/off)",
+          "power_ble_follow": "After the power entity turns on, also send BLE on"
+        },
+        "data_description": {
+          "power_entity": "Optional. A wall or smart light/switch already in Home Assistant. This integration then turns that entity on/off instead of sending BLE 0xB3/0xB2. Brightness, color temperature, and scenes still use BLE.",
+          "power_ble_follow": "When the power entity changes from off to on (including a physical wall switch), also advertise BLE on after a short delay so the lamp leaves its last off state."
         }
       }
     }
