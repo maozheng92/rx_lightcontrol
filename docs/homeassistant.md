@@ -7,7 +7,7 @@
 - 重启后恢复上次开关/亮度/色温（`RestoreEntity`）
 - 扫描空中的控制帧来同步状态：照明灯听 HFKJ/DLKJ（手机、遥控器、另一台 HA 发出的命令）；家庭 Mesh 听厂家数据 `0x0F71`（灯自己也会周期性广播 DPS）
 
-没有扫到广播时仍是 assumed-state。属性 `state_source` 为 `ble` / `command` / `restored`。
+没有扫到广播时仍是 assumed-state。属性 `state_source` 为 `ble` / `command` / `restored` / `power_entity`。
 
 集成图标放在 `custom_components/rx_lightcontrol/brand/`（Home Assistant **2026.3** 起在「设备与服务」里显示；更早版本仍用根目录 `icon.png` 给 HACS）。
 
@@ -21,7 +21,7 @@
 
 **设置 → 设备与服务 → 添加集成 → 睿信灯控**
 
-也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.2.0）。仓库根目录的 `icon.png` 来自 App 启动图标，会显示在 HACS 里。
+也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.3.0）。仓库根目录的 `icon.png` 来自 App 启动图标，会显示在 HACS 里。
 
 最低：Home Assistant 2024.8。主机需要：
 
@@ -60,6 +60,17 @@
 
 `destId` 255 是 App 首页「全开/全关」，不要拿来当单灯对码。
 
+### 用已有灯/开关代替 BLE 开/关
+
+墙上智能开关已经进 HA 时：集成选项里选 **电源实体**（`light.*` 或 `switch.*`）。
+
+- 本集成灯实体的开/关会去拨那个实体，不再发 `0xB3` / `0xB2`
+- 亮度、色温、场景仍走 BLE（灯必须已经通电）
+- 开关状态跟电源实体走（墙开会同步到本实体）
+- 默认在电源打开约 0.6 秒后补发一次 BLE 开灯；可在选项里关掉
+
+不要把本集成自己的灯实体填进去。
+
 发送方式：
 
 1. **本机蓝牙适配器**：选 `hci0` 等。集成先走 raw HCI（31 字节原样，和手机一致），失败再退到 BlueZ 的 13 个 Service UUID。
@@ -73,7 +84,7 @@
 
 | 实体 | 作用 |
 | --- | --- |
-| `light.*` | 开/关（`0xB3` / `0xB2`）、亮度（`0xB5`，滑条百分数 ×10）、色温（`0xB7`，百分数 ×10） |
+| `light.*` | 开/关（默认 `0xB3` / `0xB2`；选项里可改成拨电源实体）、亮度（`0xB5`，滑条百分数 ×10）、色温（`0xB7`，百分数 ×10） |
 | 效果 | 温馨/阅读/会客/日光/月光/娱乐、小夜灯、分段 1–3、全亮/办公/护眼/儿童 |
 | `button.*_pair` | 再发对码 `0xB4 AA 66 55` |
 | `button.*_unpair` | 删除配对 `0xB0 00 00 00`，然后移除本设备 |
@@ -126,7 +137,7 @@ python3 tools/ble_light_encode.py deli-decode \
 
 ## 6. 限制
 
-- 照明灯本身不回状态。墙开如果只走市电、不发 BLE，HA 看不到。手机 App / 遥控器发出的 HFKJ/DLKJ 广播，本机或 `bluetooth_proxy` 扫到后会同步。
+- 照明灯本身不回状态。墙开如果只走市电、不发 BLE，HA 看不到；可在选项里绑定电源实体（`light` / `switch`）用那个开关代替 BLE 开/关。手机 App / 遥控器发出的 HFKJ/DLKJ 广播，本机或 `bluetooth_proxy` 扫到后会同步。
 - 集成图标需要 Home Assistant 2026.3+（`brand/` 目录）。更早版本 HACS 列表能看到图标，「添加集成」卡片可能仍是默认拼图。
 - 本机 HCI 和 BlueZ 扫描可能抢适配器。若打不开灯，改用 MQTT 专用适配器，或暂时关掉其它占用。
 - Mesh 厂家数据加 flags 会超过 31 字节，因此 mesh 帧不带 flags，只发 Manufacturer Specific。

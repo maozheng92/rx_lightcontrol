@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -15,11 +16,20 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
@@ -31,6 +41,7 @@ from .const import (
     MANUFACTURER,
     MODEL_DELI,
     MODEL_MESH,
+    POWER_SETTLE_SECONDS,
     signal_light_state,
 )
 from .coordinator import RxLightClient
@@ -70,6 +81,7 @@ class RxLight(RestoreEntity, LightEntity):
         self._attr_effect = EFFECT_OFF
         self._state_source = "unknown"
         self._last_seen: datetime | None = None
+        self._syncing_power = False
         if client.is_deli:
             self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
             self._attr_color_mode = ColorMode.COLOR_TEMP
@@ -88,6 +100,8 @@ class RxLight(RestoreEntity, LightEntity):
 
     @property
     def assumed_state(self) -> bool:
+        if self._client.power_entity:
+            return False
         return self._state_source != "ble"
 
     async def async_added_to_hass(self) -> None:
@@ -108,6 +122,14 @@ class RxLight(RestoreEntity, LightEntity):
             if effect:
                 self._attr_effect = effect
             self._state_source = "restored"
+        power_entity = self._client.power_entity
+        if power_entity:
+            self._apply_power_state(self.hass.states.get(power_entity))
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [power_entity], self._async_power_entity_changed
+                )
+            )
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
@@ -117,7 +139,79 @@ class RxLight(RestoreEntity, LightEntity):
         )
 
     @callback
+    def _async_power_entity_changed(self, event: Event) -> None:
+        if self._syncing_power:
+            return
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        self._apply_power_state(new_state)
+        self.async_write_ha_state()
+        if old_state is None or old_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+        was_on = old_state.state == STATE_ON
+        now_on = bool(self._attr_is_on)
+        if now_on and not was_on and self._client.power_ble_follow:
+            self.hass.async_create_task(self._async_ble_switch(True))
+
+    def _apply_power_state(self, state) -> None:
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+        self._attr_is_on = state.state == STATE_ON
+        self._state_source = "power_entity"
+        if not self._attr_is_on:
+            self._attr_effect = EFFECT_OFF
+
+    def _power_target_ok(self, entity_id: str) -> bool:
+        if entity_id == self.entity_id:
+            return False
+        registry = er.async_get(self.hass)
+        item = registry.async_get(entity_id)
+        if item is not None and item.platform == DOMAIN:
+            return False
+        return True
+
+    async def _async_set_power_entity(self, on: bool) -> bool:
+        """Drive the linked light/switch. Return True if it actually changed."""
+        entity_id = self._client.power_entity
+        if not entity_id or not self._power_target_ok(entity_id):
+            return False
+        current = self.hass.states.get(entity_id)
+        currently_on = current is not None and current.state == STATE_ON
+        if currently_on == on:
+            return False
+        domain = entity_id.split(".", 1)[0]
+        self._syncing_power = True
+        try:
+            await self.hass.services.async_call(
+                domain,
+                SERVICE_TURN_ON if on else SERVICE_TURN_OFF,
+                {ATTR_ENTITY_ID: entity_id},
+                blocking=True,
+            )
+        finally:
+            self._syncing_power = False
+        return True
+
+    async def _async_ble_switch(self, on: bool) -> None:
+        if self._client.is_deli:
+            await self._client.async_send_deli("on" if on else "off")
+        else:
+            await self._client.async_send_mesh(power=1 if on else 0)
+
+    async def _async_ensure_powered(self) -> None:
+        changed = await self._async_set_power_entity(True)
+        if changed:
+            await asyncio.sleep(POWER_SETTLE_SECONDS)
+
+    @callback
     def _async_apply_remote(self, state: dict[str, Any]) -> None:
+        if self._client.power_entity:
+            state = {key: value for key, value in state.items() if key != "is_on"}
+            if not any(
+                key in state
+                for key in ("brightness_percent", "cct_percent", "rgb_color", "effect")
+            ):
+                return
         if "is_on" in state:
             self._attr_is_on = bool(state["is_on"])
         if "brightness_percent" in state:
@@ -146,18 +240,24 @@ class RxLight(RestoreEntity, LightEntity):
         kelvin = kwargs.get(ATTR_COLOR_TEMP_KELVIN)
         rgb = kwargs.get(ATTR_RGB_COLOR)
         effect = kwargs.get(ATTR_EFFECT)
+        was_off = not self._attr_is_on
+
+        if self._client.power_entity:
+            await self._async_ensure_powered()
 
         if self._client.is_deli:
             if effect and effect != EFFECT_OFF:
                 await self._async_apply_effect(effect)
                 self._attr_is_on = True
                 self._attr_effect = effect
-                self._state_source = "command"
+                self._state_source = "power_entity" if self._client.power_entity else "command"
                 self.async_write_ha_state()
                 return
-            was_off = not self._attr_is_on
-            if was_off or (brightness is None and kelvin is None):
+            send_ble_on = was_off or (brightness is None and kelvin is None)
+            if send_ble_on and not self._client.power_entity:
                 await self._client.async_send_deli("on")
+            elif send_ble_on and self._client.power_ble_follow:
+                await self._async_ble_switch(True)
             if brightness is not None:
                 percent = ha_brightness_to_percent(brightness)
                 await self._client.async_send_deli("brightness", brightness_slider_payload(percent))
@@ -171,7 +271,7 @@ class RxLight(RestoreEntity, LightEntity):
             self._attr_is_on = True
             self._attr_color_mode = ColorMode.COLOR_TEMP
             self._attr_effect = EFFECT_OFF
-            self._state_source = "command"
+            self._state_source = "power_entity" if self._client.power_entity else "command"
             self.async_write_ha_state()
             return
 
@@ -189,22 +289,26 @@ class RxLight(RestoreEntity, LightEntity):
             percent = ha_brightness_to_percent(brightness)
             self._attr_brightness = percent_to_ha_brightness(percent)
             self._client._mesh_brightness = percent
-        kwargs_mesh: dict[str, Any] = {"power": 1}
+        kwargs_mesh: dict[str, Any] = {}
+        if not self._client.power_entity or self._client.power_ble_follow:
+            kwargs_mesh["power"] = 1
         if rgb is not None:
             kwargs_mesh.update(red=rgb[0], green=rgb[1], blue=rgb[2])
         await self._client.async_send_mesh(**kwargs_mesh)
         self._attr_is_on = True
-        self._state_source = "command"
+        self._state_source = "power_entity" if self._client.power_entity else "command"
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        if self._client.is_deli:
+        if self._client.power_entity:
+            await self._async_set_power_entity(False)
+        elif self._client.is_deli:
             await self._client.async_send_deli("off")
         else:
             await self._client.async_send_mesh(power=0)
         self._attr_is_on = False
         self._attr_effect = EFFECT_OFF
-        self._state_source = "command"
+        self._state_source = "power_entity" if self._client.power_entity else "command"
         self.async_write_ha_state()
 
     async def _async_apply_effect(self, effect: str) -> None:
@@ -226,6 +330,8 @@ class RxLight(RestoreEntity, LightEntity):
             "protocol": self._client.protocol,
             "state_source": self._state_source,
         }
+        if self._client.power_entity:
+            attrs["power_entity"] = self._client.power_entity
         if self._last_seen is not None:
             attrs["last_seen"] = self._last_seen.isoformat()
         if self._client.is_deli:

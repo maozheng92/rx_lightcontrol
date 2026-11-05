@@ -16,7 +16,7 @@
 - [两套 BLE 广播协议总表](docs/ble-light-protocol.md)
 - [Home Assistant 安装与对码](docs/homeassistant.md)
 
-当前正式版：**v1.2.0**
+当前正式版：**v1.3.0**
 
 生成空中 payload：
 
@@ -42,4 +42,4 @@ python3 tools/ble_light_encode.py mesh --dev-id AABBCC --power 1 --brightness 80
 
 也可以手动复制 `custom_components/rx_lightcontrol` 到 `config/custom_components/rx_lightcontrol/` 后重启。
 
-灯控仍然是 BLE 广播：HA 主机要有蓝牙适配器，或用 MQTT 把帧交给 [`tools/mqtt_ble_advertiser.py`](tools/mqtt_ble_advertiser.py) / [`esphome/rx_light_advertiser.yaml`](esphome/rx_light_advertiser.yaml)。普通 ESPHome `bluetooth_proxy` 只能扫描，不能发广播。
+灯控仍然是 BLE 广播：HA 主机要有蓝牙适配器，或用 MQTT 把帧交给 [`tools/mqtt_ble_advertiser.py`](tools/mqtt_ble_advertiser.py) / [`esphome/rx_light_advertiser.yaml`](esphome/rx_light_advertiser.yaml)。普通 ESPHome `bluetooth_proxy` 只能扫描，不能发广播。墙上智能开关已经进 HA 时，可在集成选项里选电源实体，用那个 `light` / `switch` 代替 BLE 开/关。

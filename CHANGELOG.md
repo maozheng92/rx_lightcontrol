@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 — 2026-11-05
+
+- 选项「电源实体」：用已有的 `light` / `switch` 代替 BLE 开/关（`0xB3` / `0xB2`）
+- 亮度、色温、场景仍走 BLE；开关状态跟随该实体
+- 「电源实体打开后再补发 BLE 开灯」可关
+
 ## 1.2.0 — 2026-11-04
 
 - 集成图标放到 `custom_components/rx_lightcontrol/brand/`（HA 2026.3+ 在设置里显示 App 启动图标）
