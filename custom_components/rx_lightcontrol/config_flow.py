@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Optional
 
 import voluptuous as vol
@@ -92,6 +93,22 @@ _PAIR_RESULT_SELECTOR = selector.SelectSelector(
         mode=selector.SelectSelectorMode.LIST,
     )
 )
+
+
+def _power_entity_selector(
+    hass, extra_exclude: Sequence[str] | None = None
+) -> selector.EntitySelector:
+    """Pick a wall light/switch, excluding this integration's own lamps."""
+    registry = er.async_get(hass)
+    exclude = {item.entity_id for item in registry.entities.values() if item.platform == DOMAIN}
+    exclude.update(entity_id for entity_id in (extra_exclude or ()) if entity_id)
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=["light", "switch"],
+            exclude_entities=sorted(exclude),
+            multiple=False,
+        )
+    )
 
 
 def _adapter_selector() -> selector.SelectSelector:
@@ -270,7 +287,7 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             and self._data.get(CONF_SETUP_MODE) == SETUP_PAIR_NEW
         ):
             return await self.async_step_pair()
-        return self._create()
+        return await self.async_step_power()
 
     async def async_step_pair(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
         if self._pair_task is None:
@@ -303,7 +320,7 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if user_input.get("result") == "retry":
                 return await self.async_step_pair()
-            return self._create()
+            return await self.async_step_power()
         return self.async_show_form(
             step_id="pair_confirm",
             data_schema=vol.Schema({vol.Required("result", default="success"): _PAIR_RESULT_SELECTOR}),
@@ -319,11 +336,33 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if user_input.get("retry"):
                 return await self.async_step_pair()
-            return self._create()
+            return await self.async_step_power()
         return self.async_show_form(
             step_id="pair_failed",
             data_schema=vol.Schema({vol.Required("retry", default=True): bool}),
             errors={"base": "advertise_failed"},
+        )
+
+    async def async_step_power(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
+        if user_input is not None:
+            power = str(user_input.get(CONF_POWER_ENTITY) or "").strip()
+            if power:
+                self._data[CONF_POWER_ENTITY] = power
+            self._data[CONF_POWER_BLE_FOLLOW] = bool(
+                user_input.get(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW)
+            )
+            return self._create()
+        return self.async_show_form(
+            step_id="power",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_POWER_ENTITY): _power_entity_selector(self.hass),
+                    vol.Optional(
+                        CONF_POWER_BLE_FOLLOW, default=DEFAULT_POWER_BLE_FOLLOW
+                    ): bool,
+                }
+            ),
+            description_placeholders={"name": str(self._data.get(CONF_NAME, ""))},
         )
 
     def _create(self) -> FlowResult:
@@ -342,7 +381,17 @@ class RxLightControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data[CONF_DEST_ID] = self._data[CONF_DEST_ID]
         else:
             data[CONF_DEV_ID] = self._data[CONF_DEV_ID]
-        return self.async_create_entry(title=self._data[CONF_NAME], data=data)
+        options: dict[str, Any] = {
+            CONF_POWER_BLE_FOLLOW: bool(
+                self._data.get(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW)
+            ),
+        }
+        power = str(self._data.get(CONF_POWER_ENTITY) or "").strip()
+        if power:
+            options[CONF_POWER_ENTITY] = power
+        return self.async_create_entry(
+            title=self._data[CONF_NAME], data=data, options=options
+        )
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
@@ -351,6 +400,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: Optional[dict[str, Any]] = None) -> FlowResult:
         current = {**self._entry.data, **self._entry.options}
+        placeholders = {"name": self._entry.title}
         if user_input is not None:
             unpair_now = bool(user_input.pop(CONF_UNPAIR_NOW, False))
             pair_now = bool(user_input.pop(CONF_PAIR_NOW, False))
@@ -368,6 +418,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         step_id="init",
                         data_schema=self._schema(current),
                         errors={"base": "advertise_failed"},
+                        description_placeholders=placeholders,
                     )
                 self.hass.async_create_task(
                     self.hass.config_entries.async_remove(self._entry.entry_id)
@@ -381,12 +432,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         step_id="init",
                         data_schema=self._schema(current),
                         errors={"base": "advertise_failed"},
+                        description_placeholders=placeholders,
                     )
             return self.async_create_entry(title="", data=user_input)
-        return self.async_show_form(step_id="init", data_schema=self._schema(current))
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self._schema(current),
+            description_placeholders=placeholders,
+        )
 
     def _schema(self, current: dict[str, Any]) -> vol.Schema:
         schema: dict[Any, Any] = {
+            (
+                vol.Optional(
+                    CONF_POWER_ENTITY,
+                    description={"suggested_value": current[CONF_POWER_ENTITY]},
+                )
+                if current.get(CONF_POWER_ENTITY)
+                else vol.Optional(CONF_POWER_ENTITY)
+            ): _power_entity_selector(self.hass),
+            vol.Optional(
+                CONF_POWER_BLE_FOLLOW,
+                default=bool(current.get(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW)),
+            ): bool,
             vol.Required(CONF_TRANSMIT, default=current.get(CONF_TRANSMIT, TRANSMIT_LOCAL)): _TRANSMIT_SELECTOR,
             vol.Optional(CONF_ADAPTER, default=current.get(CONF_ADAPTER, "hci0")): str,
             vol.Optional(CONF_MQTT_TOPIC, default=current.get(CONF_MQTT_TOPIC, DEFAULT_MQTT_TOPIC)): str,
@@ -402,18 +470,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(
                 CONF_MAX_KELVIN, default=int(current.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN))
             ): vol.All(vol.Coerce(int), vol.Range(min=4000, max=7000)),
-            (
-                vol.Optional(
-                    CONF_POWER_ENTITY,
-                    description={"suggested_value": current[CONF_POWER_ENTITY]},
-                )
-                if current.get(CONF_POWER_ENTITY)
-                else vol.Optional(CONF_POWER_ENTITY)
-            ): self._power_selector(),
-            vol.Optional(
-                CONF_POWER_BLE_FOLLOW,
-                default=bool(current.get(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW)),
-            ): bool,
         }
         if current.get(CONF_PROTOCOL) == PROTOCOL_DELI:
             schema[vol.Required(CONF_DEST_ID, default=int(current.get(CONF_DEST_ID, 1)))] = vol.All(
@@ -422,17 +478,3 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             schema[vol.Optional(CONF_PAIR_NOW, default=False)] = bool
             schema[vol.Optional(CONF_UNPAIR_NOW, default=False)] = bool
         return vol.Schema(schema)
-
-    def _power_selector(self) -> selector.EntitySelector:
-        registry = er.async_get(self.hass)
-        exclude = [
-            item.entity_id
-            for item in er.async_entries_for_config_entry(registry, self._entry.entry_id)
-        ]
-        return selector.EntitySelector(
-            selector.EntitySelectorConfig(
-                domain=["light", "switch"],
-                exclude_entities=exclude,
-                multiple=False,
-            )
-        )

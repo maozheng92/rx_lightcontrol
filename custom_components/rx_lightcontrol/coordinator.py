@@ -150,6 +150,25 @@ class RxLightClient:
     def power_ble_follow(self) -> bool:
         return bool(self._cfg(CONF_POWER_BLE_FOLLOW, DEFAULT_POWER_BLE_FOLLOW))
 
+    def async_set_power_entity(self, entity_id: Optional[str]) -> None:
+        text = str(entity_id or "").strip() or None
+        if text == self.power_entity:
+            return
+        options = dict(self.entry.options)
+        if text:
+            options[CONF_POWER_ENTITY] = text
+        else:
+            options.pop(CONF_POWER_ENTITY, None)
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+
+    def async_set_power_ble_follow(self, enabled: bool) -> None:
+        flag = bool(enabled)
+        if flag == self.power_ble_follow and CONF_POWER_BLE_FOLLOW in self.entry.options:
+            return
+        options = dict(self.entry.options)
+        options[CONF_POWER_BLE_FOLLOW] = flag
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+
     def _cfg(self, key: str, default: Any = None) -> Any:
         if key in self.entry.options:
             return self.entry.options[key]

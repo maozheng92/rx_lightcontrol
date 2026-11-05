@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 DOMAIN = "rx_lightcontrol"
-PLATFORMS_DELI = ("light", "button")
-PLATFORMS_MESH = ("light",)
+PLATFORMS_DELI = ("light", "button", "select", "switch")
+PLATFORMS_MESH = ("light", "select", "switch")
+POWER_ENTITY_BLE = "ble"
 
 def signal_light_state(entry_id: str) -> str:
     return f"{DOMAIN}_state_{entry_id}"
