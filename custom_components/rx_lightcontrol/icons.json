@@ -7,6 +7,12 @@
     },
     "light": {
       "light": { "default": "mdi:ceiling-light" }
+    },
+    "select": {
+      "power_entity": { "default": "mdi:light-switch" }
+    },
+    "switch": {
+      "power_ble_follow": { "default": "mdi:bluetooth" }
     }
   }
 }

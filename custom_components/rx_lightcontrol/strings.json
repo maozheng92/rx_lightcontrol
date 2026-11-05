@@ -71,6 +71,18 @@
         "data": {
           "mqtt_topic": "MQTT topic"
         }
+      },
+      "power": {
+        "title": "Power for {name}",
+        "description": "Optional and per lamp. Bind a wall or smart light/switch already in Home Assistant to this device only. Leave empty to keep BLE on/off. Other lamps are configured separately.",
+        "data": {
+          "power_entity": "Power entity (this lamp only)",
+          "power_ble_follow": "After the power entity turns on, also send BLE on"
+        },
+        "data_description": {
+          "power_entity": "Replaces BLE 0xB3/0xB2 for this lamp. Brightness, color temperature, and scenes still use BLE.",
+          "power_ble_follow": "When this lamp's power entity goes from off to on, advertise BLE on after a short delay."
+        }
       }
     },
     "progress": {
@@ -91,7 +103,8 @@
     },
     "step": {
       "init": {
-        "title": "睿信灯控 options",
+        "title": "{name}",
+        "description": "These options apply only to {name}. Each lamp has its own Configure screen and its own power entity.",
         "data": {
           "transmit": "How to send advertisements",
           "adapter": "HCI adapter",
@@ -103,12 +116,12 @@
           "dest_id": "destId",
           "pair_now": "Re-pair now (put the lamp in learn mode first)",
           "unpair_now": "Delete pairing now (0xB0) and remove this device",
-          "power_entity": "Power entity (replaces BLE on/off)",
+          "power_entity": "Power entity (this lamp only)",
           "power_ble_follow": "After the power entity turns on, also send BLE on"
         },
         "data_description": {
-          "power_entity": "Optional. A wall or smart light/switch already in Home Assistant. This integration then turns that entity on/off instead of sending BLE 0xB3/0xB2. Brightness, color temperature, and scenes still use BLE.",
-          "power_ble_follow": "When the power entity changes from off to on (including a physical wall switch), also advertise BLE on after a short delay so the lamp leaves its last off state."
+          "power_entity": "Optional. A wall or smart light/switch for this lamp only. Other lamps are not changed. Replaces BLE 0xB3/0xB2; brightness, color temperature, and scenes still use BLE.",
+          "power_ble_follow": "When this lamp's power entity changes from off to on (including a physical wall switch), also advertise BLE on after a short delay."
         }
       }
     }
@@ -118,6 +131,17 @@
       "pair": { "name": "Pair" },
       "unpair": { "name": "Delete pairing" },
       "night": { "name": "Night light" }
+    },
+    "select": {
+      "power_entity": {
+        "name": "Power entity",
+        "state": {
+          "ble": "BLE on/off"
+        }
+      }
+    },
+    "switch": {
+      "power_ble_follow": { "name": "BLE on after power entity" }
     }
   },
   "services": {

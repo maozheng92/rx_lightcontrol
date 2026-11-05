@@ -71,6 +71,18 @@
         "data": {
           "mqtt_topic": "MQTT 主题"
         }
+      },
+      "power": {
+        "title": "「{name}」的电源",
+        "description": "可选，只作用于这一盏「{name}」。给它单独指定墙上开关或智能灯；留空则仍用 BLE 开/关。其它灯请在各自添加或配置时再选。",
+        "data": {
+          "power_entity": "电源实体（仅本灯）",
+          "power_ble_follow": "电源实体打开后再补发 BLE 开灯"
+        },
+        "data_description": {
+          "power_entity": "用这个实体代替本灯的 BLE 0xB3/0xB2。亮度、色温、场景仍走 BLE。",
+          "power_ble_follow": "本灯绑定的电源从关到开时，稍后再补发一次 BLE 开灯。"
+        }
       }
     },
     "progress": {
@@ -91,7 +103,8 @@
     },
     "step": {
       "init": {
-        "title": "睿信灯控选项",
+        "title": "{name}",
+        "description": "这些选项只作用于「{name}」。客厅、卧室等请分别打开对应设备的「配置」，各选各的电源实体。",
         "data": {
           "transmit": "发送方式",
           "adapter": "HCI 适配器",
@@ -103,12 +116,12 @@
           "dest_id": "destId",
           "pair_now": "现在重新对码（先把灯打到学习态）",
           "unpair_now": "现在删除配对（发 0xB0）并移除本设备",
-          "power_entity": "电源实体（用灯/开关代替 BLE 开/关）",
+          "power_entity": "电源实体（仅本灯）",
           "power_ble_follow": "电源实体打开后再补发 BLE 开灯"
         },
         "data_description": {
-          "power_entity": "可选。已经进 Home Assistant 的墙开或智能灯/开关。本集成的开/关会去拨那个实体，不再发 BLE 0xB3/0xB2。亮度、色温、场景仍走 BLE。",
-          "power_ble_follow": "电源实体从关到开时（包括人去扳墙开），稍等后再补发一次 BLE 开灯，避免灯还停在上次的关闭状态。"
+          "power_entity": "可选，只改这一盏。其它灯不会跟着变。用这个实体代替本灯的 BLE 0xB3/0xB2；亮度、色温、场景仍走 BLE。",
+          "power_ble_follow": "本灯绑定的电源从关到开时（包括人去扳墙开），稍后再补发一次 BLE 开灯。"
         }
       }
     }
@@ -118,6 +131,17 @@
       "pair": { "name": "对码" },
       "unpair": { "name": "删除配对" },
       "night": { "name": "小夜灯" }
+    },
+    "select": {
+      "power_entity": {
+        "name": "电源实体",
+        "state": {
+          "ble": "BLE 开/关"
+        }
+      }
+    },
+    "switch": {
+      "power_ble_follow": { "name": "电源打开后补发 BLE" }
     }
   }
 }
