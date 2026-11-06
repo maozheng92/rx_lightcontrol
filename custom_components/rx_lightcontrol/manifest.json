@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/maozheng92/rx_lightcontrol/issues",
   "loggers": ["custom_components.rx_lightcontrol"],
   "requirements": [],
-  "version": "1.4.0"
+  "version": "1.4.1"
 }

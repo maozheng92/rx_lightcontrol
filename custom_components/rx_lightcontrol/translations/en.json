@@ -74,7 +74,7 @@
       },
       "power": {
         "title": "Power for {name}",
-        "description": "Optional and per lamp. Bind a wall or smart light/switch already in Home Assistant to this device only. Leave empty to keep BLE on/off. Other lamps are configured separately.",
+        "description": "Optional and per lamp. Bind a wall or smart light/switch already in Home Assistant to {name} only. Leave empty to keep BLE on/off. Other lamps are configured separately.",
         "data": {
           "power_entity": "Power entity (this lamp only)",
           "power_ble_follow": "After the power entity turns on, also send BLE on"
