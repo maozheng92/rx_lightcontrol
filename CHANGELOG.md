@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2 — 2026-11-07
+
+- 修复 `services.yaml`：YAML 把 `group` 的字段名 `on` 解析成布尔值，HA 报 `expected str at 'group.fields[True]'`。改为 `turn_on`（仍接受旧的 `on`）
+
 ## 1.4.1 — 2026-11-06
 
 - 修复中文翻译 `{name}` 占位符与英文不一致，HA 校验报错

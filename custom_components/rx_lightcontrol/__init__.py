@@ -19,6 +19,7 @@ from .const import (
     ATTR_P2,
     ATTR_REMOVE_ENTRY,
     ATTR_SECONDS,
+    ATTR_TURN_ON,
     CONF_PROTOCOL,
     DOMAIN,
     PLATFORMS_DELI,
@@ -133,7 +134,12 @@ def _register_services(hass: HomeAssistant) -> None:
         await client.async_send_deli("timer", (hours, minutes, seconds))
 
     async def _group(call: ServiceCall) -> None:
-        on = call.data.get("on", True)
+        if ATTR_TURN_ON in call.data:
+            on = bool(call.data[ATTR_TURN_ON])
+        elif "on" in call.data:
+            on = bool(call.data["on"])
+        else:
+            on = True
         seen: set[bytes] = set()
         for client in _clients(hass):
             if not client.is_deli:
@@ -199,7 +205,12 @@ def _register_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_GROUP,
         _group,
-        schema=vol.Schema({vol.Optional("on", default=True): cv.boolean}),
+        schema=vol.Schema(
+            {
+                vol.Optional(ATTR_TURN_ON, default=True): cv.boolean,
+                vol.Optional("on"): cv.boolean,
+            }
+        ),
     )
     hass.services.async_register(
         DOMAIN,
