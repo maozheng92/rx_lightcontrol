@@ -60,6 +60,7 @@ ATTR_HOURS = "hours"
 ATTR_MINUTES = "minutes"
 ATTR_SECONDS = "seconds"
 ATTR_GROUP = "group"
+ATTR_TURN_ON = "turn_on"
 ATTR_REMOVE_ENTRY = "remove_entry"
 
 SERVICE_SEND_COMMAND = "send_command"

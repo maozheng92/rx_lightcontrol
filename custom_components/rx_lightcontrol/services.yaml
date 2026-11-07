@@ -5,7 +5,7 @@ send_command:
     command:
       name: Command
       required: true
-      example: on
+      example: "on"
       selector:
         text:
     p0:
@@ -75,7 +75,7 @@ group:
   name: Group on/off
   description: Broadcast on/off with destId 255 (app 全开/全关).
   fields:
-    on:
+    turn_on:
       name: Turn on
       default: true
       selector:

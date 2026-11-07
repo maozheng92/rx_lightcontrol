@@ -21,7 +21,7 @@
 
 **设置 → 设备与服务 → 添加集成 → 睿信灯控**
 
-也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.4.1）。仓库根目录的 `icon.png` 来自 App 启动图标，会显示在 HACS 里。
+也可以用 HACS：自定义仓库添加 `https://github.com/maozheng92/rx_lightcontrol`（类型 Integration），再搜索 **睿信灯控**。需要 GitHub Release（当前正式版 v1.4.2）。仓库根目录的 `icon.png` 来自 App 启动图标，会显示在 HACS 里。
 
 最低：Home Assistant 2024.8。主机需要：
 
@@ -106,7 +106,7 @@
 - `rx_lightcontrol.pair` — 再发对码
 - `rx_lightcontrol.unpair` — 删除配对（默认同时移除 HA 设备）
 - `rx_lightcontrol.timer` — `0xA5` 时/分/秒，全 0 取消
-- `rx_lightcontrol.group` — destId 255 全开/全关
+- `rx_lightcontrol.group` — destId 255 全开/全关（字段 `turn_on`）
 
 ---
 
